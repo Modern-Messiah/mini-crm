@@ -16,17 +16,11 @@ class TicketApiController extends Controller
     ) {
     }
 
-    /**
-     * Store a new ticket.
-     *
-     * POST /api/tickets
-     */
     public function store(StoreTicketRequest $request): JsonResponse
     {
         $validated = $request->validated();
         $files = $request->file('files') ?? [];
 
-        // Ensure files is always an array
         if (!is_array($files)) {
             $files = [$files];
         }
@@ -40,11 +34,6 @@ class TicketApiController extends Controller
         ], 201);
     }
 
-    /**
-     * Get tickets statistics.
-     *
-     * GET /api/tickets/statistics
-     */
     public function statistics(): JsonResponse
     {
         $statistics = $this->ticketService->getStatistics();

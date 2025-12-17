@@ -10,16 +10,11 @@ use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // Create roles
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
         $managerRole = Role::firstOrCreate(['name' => 'manager']);
 
-        // Create admin user directly (without factory)
         $admin = User::firstOrCreate(
             ['email' => 'admin@example.com'],
             [
@@ -29,7 +24,6 @@ class DatabaseSeeder extends Seeder
         );
         $admin->assignRole($adminRole);
 
-        // Create manager user directly
         $manager = User::firstOrCreate(
             ['email' => 'manager@example.com'],
             [
@@ -39,7 +33,6 @@ class DatabaseSeeder extends Seeder
         );
         $manager->assignRole($managerRole);
 
-        // Create test customers directly
         for ($i = 1; $i <= 5; $i++) {
             $customer = Customer::firstOrCreate(
                 ['phone' => '+7999000000' . $i],
@@ -49,7 +42,6 @@ class DatabaseSeeder extends Seeder
                 ]
             );
 
-            // Create tickets for each customer
             Ticket::firstOrCreate(
                 ['customer_id' => $customer->id, 'subject' => 'Заявка от клиента ' . $i],
                 [

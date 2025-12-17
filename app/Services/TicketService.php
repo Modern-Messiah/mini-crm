@@ -17,21 +17,14 @@ class TicketService
     ) {
     }
 
-    /**
-     * Create a new ticket with customer and attachments.
-     *
-     * @throws ValidationException
-     */
     public function createTicket(array $data, array $files = []): Ticket
     {
-        // Check rate limit (1 ticket per day from same phone/email)
         if ($this->ticketRepository->hasRecentTicket($data['phone'], $data['email'])) {
             throw ValidationException::withMessages([
                 'phone' => ['Вы уже отправляли заявку сегодня. Пожалуйста, попробуйте завтра.'],
             ]);
         }
 
-        // Find or create customer
         $customer = Customer::firstOrCreate(
             ['phone' => $data['phone']],
             [
@@ -40,7 +33,6 @@ class TicketService
             ]
         );
 
-        // Update customer name and email if changed
         if ($customer->name !== $data['name'] || $customer->email !== $data['email']) {
             $customer->update([
                 'name' => $data['name'],
@@ -48,7 +40,6 @@ class TicketService
             ]);
         }
 
-        // Create ticket
         $ticket = $this->ticketRepository->create([
             'customer_id' => $customer->id,
             'subject' => $data['subject'],
@@ -56,7 +47,6 @@ class TicketService
             'status' => TicketStatus::NEW ,
         ]);
 
-        // Attach files
         foreach ($files as $file) {
             if ($file instanceof UploadedFile) {
                 $ticket->addMedia($file)->toMediaCollection('attachments');
@@ -66,25 +56,16 @@ class TicketService
         return $ticket->load('customer');
     }
 
-    /**
-     * Get paginated tickets with filters.
-     */
     public function getTickets(int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
         return $this->ticketRepository->getPaginated($perPage, $filters);
     }
 
-    /**
-     * Get ticket with full details.
-     */
     public function getTicketDetails(int $id): ?Ticket
     {
         return $this->ticketRepository->findWithMedia($id);
     }
 
-    /**
-     * Update ticket status.
-     */
     public function updateStatus(int $ticketId, TicketStatus $status): ?Ticket
     {
         $ticket = $this->ticketRepository->find($ticketId);
@@ -96,9 +77,6 @@ class TicketService
         return $this->ticketRepository->updateStatus($ticket, $status);
     }
 
-    /**
-     * Get statistics for the given periods.
-     */
     public function getStatistics(): array
     {
         return [

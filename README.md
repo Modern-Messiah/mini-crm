@@ -167,7 +167,7 @@ app/
 - **Laravel 12** - PHP фреймворк
 - **spatie/laravel-permission** - Роли и права
 - **spatie/laravel-medialibrary** - Работа с файлами
-- **SQLite** - База данных (по умолчанию)
+- **SQLite** - База данных
 
 ## Особенности
 

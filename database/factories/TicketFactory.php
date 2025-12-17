@@ -53,15 +53,15 @@ class TicketFactory extends Factory
      */
     public function definition(): array
     {
-        $status = fake()->randomElement(TicketStatus::cases());
+        $status = $this->faker->randomElement(TicketStatus::cases());
 
         return [
             'customer_id' => Customer::factory(),
-            'subject' => fake()->randomElement(self::$subjects),
-            'text' => fake()->randomElement(self::$messages),
+            'subject' => $this->faker->randomElement(self::$subjects),
+            'text' => $this->faker->randomElement(self::$messages),
             'status' => $status,
             'manager_response_at' => $status === TicketStatus::PROCESSED
-                ? fake()->dateTimeBetween('-1 week', 'now')
+                ? $this->faker->dateTimeBetween('-1 week', 'now')
                 : null,
         ];
     }
@@ -95,7 +95,7 @@ class TicketFactory extends Factory
     {
         return $this->state(fn(array $attributes) => [
             'status' => TicketStatus::PROCESSED,
-            'manager_response_at' => fake()->dateTimeBetween('-1 week', 'now'),
+            'manager_response_at' => now(),
         ]);
     }
 }

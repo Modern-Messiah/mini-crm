@@ -19,29 +19,44 @@ class DatabaseSeeder extends Seeder
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
         $managerRole = Role::firstOrCreate(['name' => 'manager']);
 
-        // Create admin user
-        $admin = User::factory()->create([
-            'name' => 'Admin',
-            'email' => 'admin@example.com',
-            'password' => bcrypt('password'),
-        ]);
+        // Create admin user directly (without factory)
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin',
+                'password' => bcrypt('password'),
+            ]
+        );
         $admin->assignRole($adminRole);
 
-        // Create manager user
-        $manager = User::factory()->create([
-            'name' => 'Manager',
-            'email' => 'manager@example.com',
-            'password' => bcrypt('password'),
-        ]);
+        // Create manager user directly
+        $manager = User::firstOrCreate(
+            ['email' => 'manager@example.com'],
+            [
+                'name' => 'Manager',
+                'password' => bcrypt('password'),
+            ]
+        );
         $manager->assignRole($managerRole);
 
-        // Create customers with tickets
-        $customers = Customer::factory(10)->create();
+        // Create test customers directly
+        for ($i = 1; $i <= 5; $i++) {
+            $customer = Customer::firstOrCreate(
+                ['phone' => '+7999000000' . $i],
+                [
+                    'name' => 'Клиент ' . $i,
+                    'email' => 'client' . $i . '@example.com',
+                ]
+            );
 
-        foreach ($customers as $customer) {
-            Ticket::factory(rand(1, 3))->create([
-                'customer_id' => $customer->id,
-            ]);
+            // Create tickets for each customer
+            Ticket::firstOrCreate(
+                ['customer_id' => $customer->id, 'subject' => 'Заявка от клиента ' . $i],
+                [
+                    'text' => 'Текст обращения клиента ' . $i,
+                    'status' => 'new',
+                ]
+            );
         }
     }
 }

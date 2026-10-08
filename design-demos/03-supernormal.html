@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мини-CRM</title>
+<!--
+Мини-CRM. Стол с тремя лотками, не приложение с боковой рейкой и не тёмная сцена.
+Допущения: очередь открыта сразу. «Вход» — отдельный бланк, верные почта и пароль возвращают на стол и подписывают сотрудника. Пять бланков лежат в «Новых». У четвёртого вложение «схема.pdf, 180 КБ». Новая заявка из виджета кладётся в тот же лоток. Первый перевод в «Обработан» пишет «Ответ: только что».
+Цвет: немелованная бумага и одна копировальная тушь. Стол oklch(0.93 0.02 82), бланк светлее, около L 0.985. Чернила почти чёрные. Единственный штамп — тёплая красная тушь, оттенок около 25, хрома около 0.12: только слово «Новый» и главная кнопка. Второго акцента нет.
+Шрифт: Cormorant Garamond для имени продукта и заголовков бланка (у него настоящая кириллица). Manrope для интерфейса и текста. Не Inter, не Geist, не Newsreader, не Fraunces, не Archivo.
+Движение: бланк переворачивается на месте. Высота дописывается пружиной без отскока и продолжается с текущей высоты, если её прервали. На узком экране лотки встают друг под друга.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --desk: oklch(0.93 0.02 82);
+    --tray: oklch(0.885 0.022 78);
+    --slip: oklch(0.985 0.008 85);
+    --ink: oklch(0.22 0.02 55);
+    --soft: oklch(0.44 0.02 60);
+    --line: oklch(0.78 0.02 75);
+    --stamp: oklch(0.44 0.12 27);
+    --stamp-press: oklch(0.38 0.11 27);
+    --on-stamp: oklch(0.98 0.008 85);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--desk);
+    color: var(--ink);
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    letter-spacing: 0;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 0;
+  }
+  button:active, .slip-face:active { transform: scale(0.97); }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  h1, h2, p { margin: 0; }
+
+  .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    padding: 28px 36px 18px;
+  }
+  .brand {
+    font-family: "Cormorant Garamond", serif;
+    font-weight: 500;
+    font-size: 48px;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+  }
+  .lede {
+    margin-top: 6px;
+    color: var(--soft);
+    font-size: 14px;
+  }
+  .nav { display: flex; gap: 18px; align-items: baseline; }
+  .nav button {
+    font-size: 14px;
+    color: var(--soft);
+    padding: 4px 0;
+  }
+  .nav button[aria-current="page"] {
+    color: var(--ink);
+    box-shadow: inset 0 -1px 0 var(--ink);
+  }
+
+  .desk {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    padding: 0 36px 36px;
+    min-height: calc(100vh - 118px);
+    align-items: stretch;
+  }
+  .tray {
+    background: var(--tray);
+    padding: 14px 12px 18px;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tray.is-dim { opacity: 0.42; }
+  .tray-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    width: 100%;
+    padding: 4px 6px 8px;
+    text-align: left;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--soft);
+  }
+  .tray-name strong {
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 15px;
+  }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .empty {
+    padding: 18px 8px;
+    color: var(--soft);
+    font-size: 14px;
+  }
+
+  .slip { background: var(--slip); }
+  .slip-face {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 12px;
+    width: 100%;
+    padding: 14px 14px 12px;
+    text-align: left;
+  }
+  .num {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 28px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    grid-row: span 2;
+    align-self: center;
+  }
+  .time { font-size: 12px; color: var(--soft); letter-spacing: 0.02em; }
+  .who { font-weight: 600; }
+  .subject {
+    grid-column: 1 / -1;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 22px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-top: 6px;
+  }
+  .phone { grid-column: 1 / -1; color: var(--soft); font-size: 14px; }
+  .stamp {
+    color: var(--stamp);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .clip { overflow: hidden; }
+  .more { padding: 0 14px 16px; }
+  .more p { margin-top: 8px; }
+  .k { color: var(--soft); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .answer { margin-top: 10px; font-size: 14px; }
+  .statuses { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .statuses button {
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    font-size: 14px;
+    background: var(--slip);
+  }
+  .statuses button[aria-pressed="true"] {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--slip);
+  }
+
+  .sheet-view {
+    min-height: calc(100vh - 118px);
+    display: grid;
+    place-items: start center;
+    padding: 12px 20px 48px;
+  }
+  .sheet {
+    width: min(460px, 100%);
+    background: var(--slip);
+    padding: 28px 26px 24px;
+  }
+  .sheet h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-weight: 500;
+    font-size: 40px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 18px;
+  }
+  label { display: block; margin-top: 14px; font-size: 13px; color: var(--soft); }
+  input, textarea {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    border-radius: 0;
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  .hint, .err, .ok { font-size: 13px; margin-top: 6px; }
+  .hint { color: var(--soft); }
+  .err { color: var(--stamp); min-height: 0; }
+  .ok { margin-bottom: 8px; }
+  .primary {
+    margin-top: 22px;
+    background: var(--stamp);
+    color: var(--on-stamp);
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .primary:active { background: var(--stamp-press); }
+  .file-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-top: 14px; }
+  .ghost { font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+
+  @media (max-width: 800px) {
+    .top { padding: 22px 16px 14px; align-items: flex-start; flex-direction: column; }
+    .brand { font-size: 40px; }
+    .desk { grid-template-columns: 1fr; padding: 0 16px 24px; min-height: 0; }
+    .tray { min-height: 0; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .tray.is-dim { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1 class="brand">Мини-CRM</h1>
+      <p class="lede" id="lede">Очередь заявок с сайта. <span id="tally">5 в очереди</span></p>
+    </div>
+    <nav class="nav">
+      <button type="button" data-view="desk" aria-current="page">Очередь</button>
+      <button type="button" data-view="widget">Виджет</button>
+      <button type="button" id="auth-btn">Вход</button>
+    </nav>
+  </header>
+
+  <main id="view-desk" class="desk">
+    <section class="tray" data-tray="new" aria-labelledby="tray-new">
+      <button type="button" class="tray-name" id="tray-new" data-dim="new">Новые <strong id="n-new">5</strong></button>
+      <div class="stack" id="stack-new"></div>
+    </section>
+    <section class="tray" data-tray="in_progress" aria-labelledby="tray-work">
+      <button type="button" class="tray-name" id="tray-work" data-dim="in_progress">В работе <strong id="n-work">0</strong></button>
+      <div class="stack" id="stack-in_progress"></div>
+    </section>
+    <section class="tray" data-tray="processed" aria-labelledby="tray-done">
+      <button type="button" class="tray-name" id="tray-done" data-dim="processed">Обработан <strong id="n-done">0</strong></button>
+      <div class="stack" id="stack-processed"></div>
+    </section>
+  </main>
+
+  <section id="view-widget" class="sheet-view" hidden>
+    <form class="sheet" id="widget-form" novalidate>
+      <h2>Бланк</h2>
+      <p class="ok" id="w-ok" hidden>Заявка принята. Ответим в эту же очередь.</p>
+      <label for="w-name">Имя</label>
+      <input id="w-name" name="name" autocomplete="name" required>
+      <p class="err" id="w-name-err"></p>
+      <label for="w-phone">Телефон</label>
+      <input id="w-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79991234567" required>
+      <p class="err" id="w-phone-err"></p>
+      <label for="w-email">Почта</label>
+      <input id="w-email" name="email" type="email" autocomplete="email" required>
+      <p class="err" id="w-email-err"></p>
+      <label for="w-subject">Тема</label>
+      <input id="w-subject" name="subject" required>
+      <p class="err" id="w-subject-err"></p>
+      <label for="w-text">Сообщение</label>
+      <textarea id="w-text" name="text" required></textarea>
+      <p class="err" id="w-text-err"></p>
+      <div class="file-row">
+        <p class="hint" id="w-files-hint">до 5 файлов, каждый не больше 10 МБ</p>
+        <button type="button" class="ghost" id="file-btn">Файлы</button>
+        <input id="w-files" type="file" multiple hidden>
+      </div>
+      <p class="hint" id="w-picked"></p>
+      <p class="err" id="w-files-err"></p>
+      <button class="primary" type="submit">Положить в очередь</button>
+    </form>
+  </section>
+
+  <section id="view-login" class="sheet-view" hidden>
+    <form class="sheet" id="login-form" novalidate>
+      <h2>Вход</h2>
+      <label for="l-email">Почта</label>
+      <input id="l-email" type="email" autocomplete="username" required>
+      <p class="err" id="l-email-err"></p>
+      <label for="l-password">Пароль</label>
+      <input id="l-password" type="password" autocomplete="current-password" required>
+      <p class="err" id="l-password-err"></p>
+      <button class="primary" type="submit">Войти</button>
+    </form>
+  </section>
+
+<script>
+(function () {
+  var STATUSES = [
+    { id: "new", label: "Новый" },
+    { id: "in_progress", label: "В работе" },
+    { id: "processed", label: "Обработан" }
+  ];
+  var USERS = [
+    { email: "admin@example.com", password: "password", name: "Администратор" },
+    { email: "manager@example.com", password: "password", name: "Менеджер" }
+  ];
+  var tickets = [1, 2, 3, 4, 5].map(function (n) {
+    return {
+      n: n,
+      time: ["09:14", "09:41", "10:06", "11:22", "12:03"][n - 1],
+      name: "Клиент " + n,
+      phone: "+7999000000" + n,
+      email: "client" + n + "@example.com",
+      subject: "Заявка от клиента " + n,
+      text: "Текст обращения клиента " + n,
+      status: "new",
+      files: n === 4 ? [{ name: "схема.pdf", size: "180 КБ" }] : [],
+      answered: ""
+    };
+  });
+  var openId = null;
+  var dim = "";
+  var session = null;
+  var springs = {};
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function esc(value) {
+    return String(value).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function byStatus(id) { return tickets.filter(function (t) { return t.status === id; }); }
+
+  function stopSpring(id) {
+    if (springs[id]) cancelAnimationFrame(springs[id]);
+    springs[id] = 0;
+  }
+
+  function springHeight(el, to) {
+    var id = el.dataset.spring || String(Math.random());
+    el.dataset.spring = id;
+    var from = el.getBoundingClientRect().height;
+    if (reduce) {
+      el.style.height = to + "px";
+      return;
+    }
+    stopSpring(id);
+    var x = from;
+    var v = 0;
+    var last = performance.now();
+    var stiffness = 210;
+    var damping = 2 * Math.sqrt(stiffness);
+    function frame(now) {
+      var dt = Math.min(0.032, (now - last) / 1000);
+      last = now;
+      var a = -stiffness * (x - to) - damping * v;
+      v += a * dt;
+      x += v * dt;
+      el.style.height = Math.max(0, x) + "px";
+      if (Math.abs(to - x) < 0.6 && Math.abs(v) < 12) {
+        el.style.height = to + "px";
+        springs[id] = 0;
+        return;
+      }
+      springs[id] = requestAnimationFrame(frame);
+    }
+    springs[id] = requestAnimationFrame(frame);
+  }
+
+  function render() {
+    var counts = { new: 0, in_progress: 0, processed: 0 };
+    tickets.forEach(function (t) { counts[t.status] += 1; });
+    document.getElementById("n-new").textContent = String(counts.new);
+    document.getElementById("n-work").textContent = String(counts.in_progress);
+    document.getElementById("n-done").textContent = String(counts.processed);
+    document.getElementById("tally").textContent = counts.new + " в очереди";
+    document.querySelectorAll(".tray").forEach(function (tray) {
+      tray.classList.toggle("is-dim", Boolean(dim) && tray.dataset.tray !== dim);
+    });
+    ["new", "in_progress", "processed"].forEach(function (status) {
+      var stack = document.getElementById("stack-" + status);
+      var rows = byStatus(status);
+      if (!rows.length) {
+        stack.innerHTML = '<p class="empty">Таких заявок нет</p>';
+        return;
+      }
+      stack.innerHTML = rows.map(function (t) {
+        var open = t.n === openId;
+        var files = t.files.map(function (f) { return esc(f.name) + ", " + esc(f.size); }).join("; ");
+        var buttons = STATUSES.map(function (st) {
+          var pressed = st.id === t.status ? ' aria-pressed="true"' : ' aria-pressed="false"';
+          return '<button type="button" data-set="' + st.id + '"' + pressed + '>' + st.label + '</button>';
+        }).join("");
+        var stamp = t.status === "new" ? '<span class="stamp">Новый</span>' : '<span>' + esc(STATUSES.filter(function (s) { return s.id === t.status; })[0].label) + '</span>';
+        return ''
+          + '<article class="slip" data-id="' + t.n + '">'
+          + '<button type="button" class="slip-face" aria-expanded="' + open + '">'
+          + '<span class="num">' + pad(t.n) + '</span>'
+          + '<span class="time">' + esc(t.time) + '</span>'
+          + '<span class="who">' + esc(t.name) + '</span>'
+          + '<span class="subject">' + esc(t.subject) + '</span>'
+          + '<span class="phone">' + esc(t.phone) + ' · ' + stamp + '</span>'
+          + '</button>'
+          + '<div class="clip" data-open="' + (open ? "1" : "0") + '">'
+          + '<div class="more">'
+          + '<p class="k">Сообщение</p><p>' + esc(t.text) + '</p>'
+          + '<p class="k">Почта</p><p>' + esc(t.email) + '</p>'
+          + (files ? '<p class="k">Вложение</p><p>' + files + '</p>' : '')
+          + (t.answered ? '<p class="answer">Ответ: ' + esc(t.answered) + '</p>' : '')
+          + '<div class="statuses">' + buttons + '</div>'
+          + '</div></div></article>';
+      }).join("");
+      stack.querySelectorAll(".clip").forEach(function (clip) {
+        var inner = clip.firstElementChild;
+        var target = clip.dataset.open === "1" ? inner.offsetHeight : 0;
+        clip.style.height = target + "px";
+      });
+    });
+  }
+
+  function toggle(id, clip) {
+    var opening = openId !== id;
+    var previous = document.querySelector('.clip[data-open="1"]');
+    if (previous && previous !== clip) {
+      previous.dataset.open = "0";
+      springHeight(previous, 0);
+      var face = previous.parentElement.querySelector(".slip-face");
+      if (face) face.setAttribute("aria-expanded", "false");
+    }
+    openId = opening ? id : null;
+    clip.dataset.open = opening ? "1" : "0";
+    clip.parentElement.querySelector(".slip-face").setAttribute("aria-expanded", opening ? "true" : "false");
+    var inner = clip.firstElementChild;
+    springHeight(clip, opening ? inner.offsetHeight : 0);
+  }
+
+  document.getElementById("view-desk").addEventListener("click", function (event) {
+    var dimBtn = event.target.closest("[data-dim]");
+    if (dimBtn && event.target === dimBtn) {
+      dim = dim === dimBtn.dataset.dim ? "" : dimBtn.dataset.dim;
+      render();
+      return;
+    }
+    var setBtn = event.target.closest("[data-set]");
+    if (setBtn) {
+      var slip = setBtn.closest(".slip");
+      var ticket = tickets.filter(function (t) { return t.n === Number(slip.dataset.id); })[0];
+      var next = setBtn.dataset.set;
+      if (next === "processed" && !ticket.answered) ticket.answered = "только что";
+      ticket.status = next;
+      openId = ticket.n;
+      render();
+      return;
+    }
+    var face = event.target.closest(".slip-face");
+    if (!face) return;
+    var article = face.closest(".slip");
+    toggle(Number(article.dataset.id), article.querySelector(".clip"));
+  });
+
+  function show(name) {
+    document.getElementById("view-desk").hidden = name !== "desk";
+    document.getElementById("view-widget").hidden = name !== "widget";
+    document.getElementById("view-login").hidden = name !== "login";
+    document.querySelectorAll("[data-view]").forEach(function (btn) {
+      if (btn.dataset.view === name) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
+  }
+
+  document.querySelectorAll("[data-view]").forEach(function (btn) {
+    btn.addEventListener("click", function () { show(btn.dataset.view); });
+  });
+
+  document.getElementById("auth-btn").addEventListener("click", function () {
+    if (session) {
+      session = null;
+      this.textContent = "Вход";
+      document.getElementById("lede").firstChild.textContent = "Очередь заявок с сайта. ";
+      show("desk");
+      return;
+    }
+    show("login");
+  });
+
+  function clearErr(id) { document.getElementById(id).textContent = ""; }
+  ["w-name", "w-phone", "w-email", "w-subject", "w-text"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", function () { clearErr(id + "-err"); });
+  });
+
+  var picked = [];
+  document.getElementById("file-btn").addEventListener("click", function () {
+    document.getElementById("w-files").click();
+  });
+  document.getElementById("w-files").addEventListener("change", function () {
+    picked = Array.prototype.slice.call(this.files || []);
+    document.getElementById("w-picked").textContent = picked.map(function (f) { return f.name; }).join(", ");
+    clearErr("w-files-err");
+  });
+
+  document.getElementById("widget-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var ok = true;
+    function need(id, message) {
+      var el = document.getElementById(id);
+      if (!el.value.trim()) { document.getElementById(id + "-err").textContent = message; ok = false; }
+    }
+    need("w-name", "Напишите имя");
+    need("w-subject", "Напишите тему");
+    need("w-text", "Напишите сообщение");
+    var email = document.getElementById("w-email").value.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      document.getElementById("w-email-err").textContent = "Нужна почта";
+      ok = false;
+    }
+    var phone = document.getElementById("w-phone").value.trim();
+    if (!/^\+[1-9]\d{1,14}$/.test(phone)) {
+      document.getElementById("w-phone-err").textContent = "Номер в формате +79991234567";
+      ok = false;
+    } else if (tickets.some(function (t) { return t.phone === phone; })) {
+      document.getElementById("w-phone-err").textContent = "С этого телефона заявка сегодня уже есть.";
+      ok = false;
+    }
+    if (picked.length > 5 || picked.some(function (f) { return f.size > 10 * 1024 * 1024; })) {
+      document.getElementById("w-files-err").textContent = "до 5 файлов, каждый не больше 10 МБ";
+      ok = false;
+    }
+    if (!ok) return;
+    var next = tickets.reduce(function (max, t) { return Math.max(max, t.n); }, 0) + 1;
+    var now = new Date();
+    tickets.push({
+      n: next,
+      time: pad(now.getHours()) + ":" + pad(now.getMinutes()),
+      name: document.getElementById("w-name").value.trim(),
+      phone: phone,
+      email: email,
+      subject: document.getElementById("w-subject").value.trim(),
+      text: document.getElementById("w-text").value.trim(),
+      status: "new",
+      files: picked.map(function (f) { return { name: f.name, size: Math.max(1, Math.round(f.size / 1024)) + " КБ" }; }),
+      answered: ""
+    });
+    openId = next;
+    dim = "";
+    picked = [];
+    event.target.reset();
+    document.getElementById("w-picked").textContent = "";
+    document.getElementById("w-ok").hidden = false;
+    render();
+    show("desk");
+  });
+
+  document.getElementById("login-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var email = document.getElementById("l-email").value.trim();
+    var password = document.getElementById("l-password").value;
+    var user = USERS.filter(function (u) { return u.email === email && u.password === password; })[0];
+    document.getElementById("l-email-err").textContent = "";
+    document.getElementById("l-password-err").textContent = "";
+    if (!user) {
+      document.getElementById("l-email-err").textContent = "Неверная почта или пароль.";
+      return;
+    }
+    session = user;
+    document.getElementById("auth-btn").textContent = "Выйти";
+    document.getElementById("lede").firstChild.textContent = user.name + ". Очередь заявок с сайта. ";
+    show("desk");
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

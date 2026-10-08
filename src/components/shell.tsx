@@ -10,7 +10,7 @@ export function Shell({
   index,
   children,
 }: {
-  user: { name: string; email: string; role: string };
+  user: { name: string; email: string; role: string; admin: boolean };
   index: PaletteIndex;
   children: React.ReactNode;
 }) {
@@ -38,7 +38,7 @@ export function Shell({
   return (
     <div className="app-frame">
       <div className="shell">
-        <Rail name={user.name} email={user.email} role={user.role} onSearch={openPalette} />
+        <Rail name={user.name} email={user.email} role={user.role} admin={user.admin} onSearch={openPalette} />
         {children}
       </div>
       <Palette key={paletteKey} open={open} index={index} onClose={() => setOpen(false)} />

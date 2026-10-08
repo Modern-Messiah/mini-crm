@@ -8,9 +8,9 @@ import { ensureSchema } from "./ensure";
 const globalForDb = globalThis as unknown as { crmSqlite?: Database.Database };
 
 function open() {
-  const dir = path.join(process.cwd(), "data");
-  fs.mkdirSync(dir, { recursive: true });
-  const sqlite = new Database(path.join(dir, "crm.sqlite"));
+  const file = process.env.CRM_DB_PATH || path.join(process.cwd(), "data", "crm.sqlite");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const sqlite = new Database(file);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");

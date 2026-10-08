@@ -23,28 +23,30 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         <h2>Заявки</h2>
         {customer.history.length === 0 ? <p className="empty">Заявок нет</p> : null}
         {customer.history.length > 0 ? (
-          <table className="ledger">
-            <thead>
-              <tr>
-                <th>№</th>
-                <th>Тема</th>
-                <th>Когда</th>
-                <th>Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customer.history.map((ticket) => (
-                <tr key={ticket.id}>
-                  <td className="mono">{ticket.number}</td>
-                  <td>
-                    <Link href={`/app?id=${ticket.id}`}>{ticket.subject}</Link>
-                  </td>
-                  <td className="mono">{ticket.createdLabel}</td>
-                  <td className={STATUS_CLASS[ticket.status]}>{STATUS_LABEL[ticket.status]}</td>
+          <div className="ledger-scroll">
+            <table className="ledger">
+              <thead>
+                <tr>
+                  <th>№</th>
+                  <th>Тема</th>
+                  <th>Когда</th>
+                  <th>Статус</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {customer.history.map((ticket) => (
+                  <tr key={ticket.id}>
+                    <td className="mono">{ticket.number}</td>
+                    <td>
+                      <Link href={`/app?id=${ticket.id}`}>{ticket.subject}</Link>
+                    </td>
+                    <td className="mono">{ticket.createdLabel}</td>
+                    <td className={STATUS_CLASS[ticket.status]}>{STATUS_LABEL[ticket.status]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : null}
       </div>
     </div>

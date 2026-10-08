@@ -41,6 +41,7 @@ import {
   STATUS_WINDOW_MS,
 } from "./limits";
 import { findTicketForStatus } from "./queries";
+import { createManager, parseStaffForm, STAFF_DENIED } from "./staff";
 
 export type ActionResult = { error?: string; saved?: boolean };
 
@@ -338,4 +339,21 @@ export async function lookupStatus(_prev: StatusState, formData: FormData): Prom
   const ticket = revealStatus(row ?? null, parsed.phone);
   if (!ticket) return { error: STATUS_MISS };
   return { ticket: { ...ticket, statusLabel: STATUS_LABEL[ticket.status] } };
+}
+
+export async function createStaff(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await actor();
+  if (me.role !== "admin") return { error: STAFF_DENIED };
+  const parsed = parseStaffForm(
+    String(formData.get("name") ?? ""),
+    String(formData.get("email") ?? ""),
+    String(formData.get("password") ?? ""),
+  );
+  if (!parsed.ok) return { error: parsed.message };
+  const passwordHash = await (await auth.$context).password.hash(parsed.password);
+  const created = createManager({ name: parsed.name, email: parsed.email, passwordHash });
+  if (!created.ok) return { error: created.message };
+  revalidatePath("/app/staff");
+  revalidatePath("/app");
+  return { saved: true };
 }

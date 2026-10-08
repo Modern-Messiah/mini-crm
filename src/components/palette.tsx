@@ -15,6 +15,7 @@ const commands: Item[] = [
   { key: "customers", label: "Клиенты", hint: "Раздел", href: "/app/customers" },
   { key: "summary", label: "Сводка", hint: "Раздел", href: "/app/summary" },
   { key: "widget", label: "Виджет", hint: "Раздел", href: "/widget" },
+  { key: "staff", label: "Сотрудники", hint: "Раздел", href: "/app/staff" },
 ];
 
 export function Palette({

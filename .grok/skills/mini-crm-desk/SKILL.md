@@ -20,7 +20,9 @@ Fonts are IBM Plex Sans and IBM Plex Mono, loaded in `src/app/layout.tsx`. Body 
 
 Do not add emoji icons, a purple gradient, a card with a colored left border, Inter or Geist as the display face, or `backdrop-filter`. Errors and overdue times use the accent. Sheets have a 1px line and no drop shadow. The command palette is the one surface that keeps a shadow.
 
-Press feedback is the existing `:active` scale of 0.97. The command palette and the mobile ticket sheet already use springs. Reduced motion removes the slide and the scale. Keep that.
+Press feedback on a button and a summary slip is the `:active` scale of 0.97. A joined scope, a queue row, a rail item, and a palette row highlight on press instead, so one segment does not shrink out of its bar. The command palette and the mobile ticket sheet already use springs. Reduced motion removes the slide and the scale. Keep that.
+
+One inset, 16px, lines up a mast, its help line, the filters, the column text, and the tables. The selection mark sits in that gutter and does not push the columns. The rail uses one index column for the stamp, the numbers, and the blank before «Поиск» and «Выйти», so those labels share an edge. A customer or staff sheet is paper on the desk, at most 760px wide. The queue and the summary stay on the blotter and share the same left edge.
 
 ## After CSS
 

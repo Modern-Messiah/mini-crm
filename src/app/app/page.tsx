@@ -90,23 +90,24 @@ export default async function QueuePage({
                 ))}
               </select>
             </label>
-            <label className="f-date">
-              С даты
-              <input name="from" type="date" defaultValue={filters.from} />
-            </label>
-            <label className="f-date">
-              По дату
-              <input name="to" type="date" defaultValue={filters.to} />
-            </label>
+            <div className="date-pair">
+              <label className="f-date">
+                С даты
+                <input name="from" type="date" defaultValue={filters.from} />
+              </label>
+              <label className="f-date">
+                По дату
+                <input name="to" type="date" defaultValue={filters.to} />
+              </label>
+            </div>
             <button className="btn press" type="submit">
               Найти
             </button>
           </div>
         </form>
         <div className="cols" aria-hidden="true">
-          <span />
           <span>Время</span>
-          <span>№</span>
+          <span className="col-no">№</span>
           <span>Клиент</span>
           <span className="col-subject">Тема</span>
           <span>Статус</span>

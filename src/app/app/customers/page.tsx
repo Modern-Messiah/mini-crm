@@ -38,7 +38,8 @@ export default async function CustomersPage({
         </form>
         {rows.length === 0 ? <p className="empty">Таких клиентов нет</p> : null}
         {rows.length > 0 ? (
-          <table className="ledger">
+          <div className="ledger-scroll">
+            <table className="ledger">
             <thead>
               <tr>
                 <th>Клиент</th>
@@ -59,7 +60,8 @@ export default async function CustomersPage({
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         ) : null}
       </div>
     </div>

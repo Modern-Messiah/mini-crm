@@ -114,14 +114,21 @@ export function listTickets(filters: Filters, userId: string, now = new Date()):
     }));
 }
 
-export function listStaff(): StaffOption[] {
+function staffRows() {
   return db
-    .select({ id: user.id, name: user.name, role: user.role })
+    .select({ id: user.id, name: user.name, email: user.email, role: user.role })
     .from(user)
     .all()
     .filter((person) => person.role === "admin" || person.role === "manager")
-    .sort((a, b) => a.name.localeCompare(b.name, "ru"))
-    .map(({ id, name }) => ({ id, name }));
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+}
+
+export function listStaff(): StaffOption[] {
+  return staffRows().map(({ id, name }) => ({ id, name }));
+}
+
+export function listPeople() {
+  return staffRows().map(({ id, name, email, role }) => ({ id, name, email, role }));
 }
 
 export function loadTicket(id: string, now = new Date()): TicketView | null {

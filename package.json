@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx src/db/seed.ts",
-    "test": "node --import tsx --test src/lib/crm.test.ts"
+    "test": "node --import tsx --test src/lib/crm.test.ts src/lib/flow.test.ts"
   },
   "dependencies": {
     "better-auth": "^1.7.7",

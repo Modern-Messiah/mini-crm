@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Мини-CRM</title>
+<!--
+Мини-CRM, рабочий прототип очереди, не лендинг.
+Допущения: экран открывается сразу очередью, уже от лица администратора. В рельсе «Выйти» уводит на отдельный полный экран «Вход»; верные почта и пароль возвращают к трём панелям. Пять бланков — за сегодняшний день, все «Новый». У бланка 4 вложение «схема.pdf, 180 КБ». Заявка из виджета дописывается в ту же очередь и сразу выбирается. Первый перевод в «Обработан» фиксирует «Ответ: только что» и больше не переписывается.
+Цвет: чернильный штамп клерка на тёплой серой бумаге. Фон — тёплый серый, oklch, хрома ниже 0,02, текст почти чёрный. Один индиго, оттенок около 265, хрома около 0,11: это штемпельная тушь, не экранный неон. Им отмечены выбранная строка, активный пункт рельса и главная кнопка.
+Шрифт: IBM Plex Sans для интерфейса, IBM Plex Mono для номеров и идентификаторов. У обоих есть кириллица. Плекс держит плотную очередь спокойно и не подменяет собой Inter, Geist, Newsreader, Fraunces, Archivo или Space Grotesk.
+Движение: кнопки и строки сжимаются в момент pointerdown. На узком экране карточка — лист справа. Пружина без отскока, критическое затухание, response 0,35 с, через requestAnimationFrame; повторный вызов продолжает с текущего сдвига. При reduced-motion остаётся только короткое появление через opacity.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: oklch(0.955 0.012 85);
+    --rail: oklch(0.925 0.014 80);
+    --paper: oklch(0.985 0.006 85);
+    --ink: oklch(0.24 0.015 70);
+    --soft: oklch(0.40 0.02 70);
+    --line: oklch(0.86 0.012 80);
+    --accent: oklch(0.42 0.11 265);
+    --accent-press: oklch(0.38 0.10 265);
+    --on-accent: oklch(0.98 0.005 85);
+    --select: oklch(0.935 0.016 265);
+    --hover: oklch(0.945 0.01 85);
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: 0;
+  }
+
+  button, input, select, textarea {
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.45;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
+    border-radius: 2px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input, select, textarea {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 6px 8px;
+    width: 100%;
+  }
+
+  textarea { resize: vertical; min-height: 112px; }
+
+  ::placeholder { color: var(--soft); opacity: 1; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  h1, h2, .wordmark {
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    font-weight: 600;
+  }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  .press.is-pressed { transform: scale(0.97); }
+
+  .shell {
+    height: 100%;
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    background: var(--bg);
+  }
+
+  .rail {
+    width: 200px;
+    background: var(--rail);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    padding: 14px 10px 12px;
+    min-height: 0;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 8px 14px;
+  }
+
+  .stamp {
+    width: 10px;
+    height: 10px;
+    background: var(--accent);
+    flex: none;
+  }
+
+  .wordmark { font-size: 16px; }
+
+  .rail-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .nav-btn {
+    height: 32px;
+    padding: 0 8px;
+    text-align: left;
+    width: 100%;
+    color: var(--ink);
+  }
+
+  .nav-btn[aria-current="page"] {
+    background: var(--select);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .rail-bottom {
+    margin-top: auto;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .who-name { font-size: 14px; font-weight: 500; }
+
+  .who-mail {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--soft);
+    overflow-wrap: anywhere;
+  }
+
+  .workspace {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .list {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .list-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 12px 8px;
+  }
+
+  .list-head h1 { font-size: 18px; margin: 0; }
+
+  .today, .count {
+    margin: 0;
+    font-size: 14px;
+    color: var(--soft);
+  }
+
+  .count { font-variant-numeric: tabular-nums; }
+
+  .queue-notice {
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: flex-end;
+    padding: 8px 12px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--soft);
+    min-width: 0;
+  }
+
+  .f-status { width: 132px; }
+  .f-date { width: 148px; }
+  .f-text { width: 164px; }
+
+  .filters input, .filters select {
+    height: 32px;
+    padding: 0 8px;
+    line-height: 30px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .cols, .row {
+    display: grid;
+    grid-template-columns: 14px 3.25rem 3.6rem minmax(0, 0.8fr) minmax(0, 1.3fr) 6.5rem;
+    column-gap: 8px;
+    align-items: center;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .cols {
+    padding-top: 6px;
+    padding-bottom: 4px;
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--soft);
+  }
+
+  .rows { flex: 1; min-height: 0; overflow: auto; }
+
+  .row {
+    height: 40px;
+    width: 100%;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    color: var(--ink);
+  }
+
+  .row.is-selected { background: var(--select); }
+
+  .row:focus-visible, .nav-btn:focus-visible { outline-offset: -2px; }
+
+  .mark {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+    justify-self: center;
+  }
+
+  .row.is-selected .mark { background: var(--accent); }
+
+  .id-cell { text-align: right; }
+
+  .ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .status-new { color: var(--accent); }
+  .status-work { color: var(--ink); }
+  .status-done { color: var(--soft); }
+
+  .empty {
+    margin: 0;
+    padding: 16px 12px;
+    font-size: 14px;
+  }
+
+  .detail {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    background: var(--bg);
+    border-left: 1px solid var(--line);
+  }
+
+  .detail-top {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .detail-top .mono { font-size: 14px; }
+
+  .detail-id { color: var(--ink); }
+
+  .detail-time { color: var(--soft); }
+
+  .close-sheet { display: none; margin-left: auto; }
+
+  .detail-body { padding: 14px 16px 32px; }
+
+  .detail-body h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+  }
+
+  .notice {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 6px 10px;
+    margin: 0 0 14px;
+  }
+
+  .kv dt {
+    margin: 0;
+    padding-top: 2px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--soft);
+  }
+
+  .kv dd {
+    margin: 0;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .block-label {
+    margin: 0 0 4px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--soft);
+  }
+
+  .body-text, .file-line, .reply {
+    margin: 0 0 14px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .status-row { margin-top: 4px; }
+
+  .status-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .btn {
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .status-btn[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .widget-view {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 20px 24px 40px;
+    background: var(--bg);
+  }
+
+  .widget-view h1, .login-view h1 {
+    margin: 0 0 8px;
+    font-size: 22px;
+  }
+
+  .help {
+    margin: 0 0 16px;
+    max-width: 42em;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--soft);
+  }
+
+  .form { max-width: 440px; }
+
+  .field {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  .field-label, .hint {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--soft);
+  }
+
+  .error {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--accent);
+  }
+
+  .file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .file-input:focus-visible + .pick-btn {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .file-names {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .login-view {
+    height: 100%;
+    overflow: auto;
+    background: var(--bg);
+    padding: 72px 20px 40px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .login-panel { width: min(100%, 400px); }
+
+  .login-view .brand { padding: 0 0 18px; }
+
+  @media (hover: hover) {
+    .nav-btn:hover { background: var(--hover); }
+    .nav-btn[aria-current="page"]:hover { background: var(--select); }
+    .row:hover { background: var(--hover); }
+    .row.is-selected:hover { background: var(--select); }
+    .btn:hover { background: var(--hover); }
+    .btn-primary:hover,
+    .status-btn[aria-pressed="true"]:hover { background: var(--accent-press); }
+  }
+
+  @media (max-width: 840px) {
+    .shell {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .rail {
+      width: auto;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      padding: 8px 10px;
+    }
+
+    .brand { padding: 0; margin-right: auto; }
+
+    .rail-nav { flex-direction: row; order: 3; width: 100%; }
+
+    .nav-btn { width: auto; padding: 0 10px; }
+
+    .rail-bottom {
+      order: 2;
+      margin-top: 0;
+      border-top: 0;
+      padding-top: 0;
+      flex-direction: row;
+      align-items: center;
+    }
+
+    .who-mail { display: none; }
+
+    .workspace { grid-template-columns: 1fr; }
+
+    .list, .detail, .widget-view { grid-column: 1; }
+
+    .f-status, .f-date, .f-text { width: calc(50% - 6px); }
+
+    .cols, .row {
+      grid-template-columns: 14px 2.6rem 3.4rem minmax(0, 1fr) 6.5rem;
+    }
+
+    .col-subject, .subject-cell { display: none; }
+
+    .detail {
+      position: fixed;
+      z-index: 5;
+      inset: 0;
+      width: auto;
+      border-left: 1px solid var(--line);
+      transform: translate3d(100%, 0, 0);
+      visibility: hidden;
+    }
+
+    .close-sheet { display: inline-flex; }
+  }
+
+  @media (max-width: 840px) and (prefers-reduced-motion: reduce) {
+    .detail {
+      transform: none;
+      opacity: 0;
+      transition: opacity 160ms linear;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .press.is-pressed { transform: none; }
+  }
+</style>
+</head>
+<body>
+  <section id="login-view" class="login-view" hidden>
+    <div class="login-panel">
+      <div class="brand">
+        <span class="stamp" aria-hidden="true"></span>
+        <span class="wordmark">Мини-CRM</span>
+      </div>
+      <h1>Вход</h1>
+      <p class="help">Администратор — admin@example.com. Менеджер — manager@example.com. Пароль у обоих — password.</p>
+      <form id="login-form" class="form" novalidate>
+        <label class="field">
+          <span class="field-label">Почта</span>
+          <input id="login-email" type="email" autocomplete="username" inputmode="email" spellcheck="false">
+        </label>
+        <p class="error" id="login-email-error" role="alert" hidden></p>
+        <label class="field">
+          <span class="field-label">Пароль</span>
+          <input id="login-password" type="password" autocomplete="current-password">
+        </label>
+        <p class="error" id="login-password-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary press">Войти</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="shell" class="shell">
+    <aside class="rail">
+      <div class="brand">
+        <span class="stamp" aria-hidden="true"></span>
+        <span class="wordmark">Мини-CRM</span>
+      </div>
+      <nav class="rail-nav" aria-label="Разделы">
+        <button type="button" class="nav-btn press" data-nav="queue">Очередь</button>
+        <button type="button" class="nav-btn press" data-nav="widget">Виджет</button>
+      </nav>
+      <div class="rail-bottom">
+        <div class="who">
+          <div class="who-name" id="who-name">Администратор</div>
+          <div class="who-mail" id="who-mail">admin@example.com</div>
+        </div>
+        <button type="button" class="btn press" id="logout">Выйти</button>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <section class="list" id="list-pane" aria-labelledby="queue-title">
+        <div class="list-head">
+          <div>
+            <h1 id="queue-title">Очередь</h1>
+            <p class="today" id="today"></p>
+          </div>
+          <p class="count" id="count"></p>
+        </div>
+        <p class="queue-notice" id="queue-notice" role="status" hidden></p>
+        <div class="filters">
+          <label class="f-status">Статус
+            <select id="filter-status">
+              <option value="">Все</option>
+              <option>Новый</option>
+              <option>В работе</option>
+              <option>Обработан</option>
+            </select>
+          </label>
+          <label class="f-date">С даты
+            <input id="filter-from" type="date">
+          </label>
+          <label class="f-date">По дату
+            <input id="filter-to" type="date">
+          </label>
+          <label class="f-text">Почта
+            <input id="filter-email" type="text" inputmode="email" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="f-text">Телефон
+            <input id="filter-phone" type="text" inputmode="tel" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <div class="cols" aria-hidden="true">
+          <span></span>
+          <span class="id-cell">№</span>
+          <span>Время</span>
+          <span class="col-name">Имя</span>
+          <span class="col-subject">Тема</span>
+          <span>Статус</span>
+        </div>
+        <div class="rows" id="rows"></div>
+      </section>
+
+      <section class="detail" id="detail" aria-label="Заявка"></section>
+
+      <section class="widget-view" id="widget-view" hidden aria-labelledby="widget-title">
+        <h1 id="widget-title">Виджет</h1>
+        <p class="help">Форма для заявки с сайта. После отправки бланк появляется в общей очереди.</p>
+        <form id="widget-form" class="form" novalidate>
+          <p class="notice" id="widget-status" role="status" hidden></p>
+          <label class="field">
+            <span class="field-label">Имя</span>
+            <input id="w-name" type="text" autocomplete="name">
+          </label>
+          <p class="error" id="w-name-error" role="alert" hidden></p>
+          <label class="field">
+            <span class="field-label">Телефон</span>
+            <input id="w-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79991234567" spellcheck="false">
+            <span class="hint">Например, +79991234567</span>
+          </label>
+          <p class="error" id="w-phone-error" role="alert" hidden></p>
+          <label class="field">
+            <span class="field-label">Почта</span>
+            <input id="w-email" type="email" inputmode="email" autocomplete="email" spellcheck="false">
+          </label>
+          <p class="error" id="w-email-error" role="alert" hidden></p>
+          <label class="field">
+            <span class="field-label">Тема</span>
+            <input id="w-subject" type="text">
+          </label>
+          <p class="error" id="w-subject-error" role="alert" hidden></p>
+          <label class="field">
+            <span class="field-label">Сообщение</span>
+            <textarea id="w-message"></textarea>
+          </label>
+          <p class="error" id="w-message-error" role="alert" hidden></p>
+          <div class="field">
+            <span class="field-label">Файлы</span>
+            <input class="file-input" id="w-files" type="file" multiple>
+            <button type="button" class="btn press pick-btn" id="pick-files">Выбрать файлы</button>
+            <span class="hint">до 5 файлов, каждый не больше 10 МБ</span>
+            <ul class="file-names" id="file-names"></ul>
+          </div>
+          <p class="error" id="w-files-error" role="alert" hidden></p>
+          <button type="submit" class="btn btn-primary press">Отправить</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+<script>
+"use strict";
+
+var RESPONSE = 0.35;
+var OMEGA = (2 * Math.PI) / RESPONSE;
+var STATUSES = ["Новый", "В работе", "Обработан"];
+var USERS = [
+  { email: "admin@example.com", password: "password", name: "Администратор" },
+  { email: "manager@example.com", password: "password", name: "Менеджер" }
+];
+
+var mobileMq = window.matchMedia("(max-width: 840px)");
+var reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+var shell = document.getElementById("shell");
+var loginView = document.getElementById("login-view");
+var listPane = document.getElementById("list-pane");
+var detail = document.getElementById("detail");
+var widgetView = document.getElementById("widget-view");
+var rowsEl = document.getElementById("rows");
+var countEl = document.getElementById("count");
+var todayEl = document.getElementById("today");
+var queueNotice = document.getElementById("queue-notice");
+var whoName = document.getElementById("who-name");
+var whoMail = document.getElementById("who-mail");
+var filterStatus = document.getElementById("filter-status");
+var filterFrom = document.getElementById("filter-from");
+var filterTo = document.getElementById("filter-to");
+var filterEmail = document.getElementById("filter-email");
+var filterPhone = document.getElementById("filter-phone");
+
+var pos = 100;
+var vel = 0;
+var target = 100;
+var rafId = 0;
+var lastTime = 0;
+var sheetOpen = false;
+var hideTimer = 0;
+var returnFocus = null;
+var selectedId = 1;
+var noticeId = 0;
+var renderedId = 0;
+var currentUser = USERS[0];
+
+function isoToday() {
+  var d = new Date();
+  var z = function (n) { return String(n).padStart(2, "0"); };
+  return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate());
+}
+
+function formatISODate(iso) {
+  var parts = iso.split("-");
+  var y = Number(parts[0]);
+  var m = Number(parts[1]);
+  var day = Number(parts[2]);
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(new Date(y, m - 1, day));
+}
+
+function clockNow() {
+  var d = new Date();
+  var z = function (n) { return String(n).padStart(2, "0"); };
+  return z(d.getHours()) + ":" + z(d.getMinutes());
+}
+
+function plural(n) {
+  var n10 = n % 10;
+  var n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return n + " заявка";
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return n + " заявки";
+  return n + " заявок";
+}
+
+function formatSize(bytes) {
+  if (bytes >= 1024 * 1024) {
+    var mb = bytes / (1024 * 1024);
+    var text = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1).replace(".", ",");
+    return text + " МБ";
+  }
+  return Math.max(1, Math.round(bytes / 1024)) + " КБ";
+}
+
+var TODAY = isoToday();
+var slips = [
+  { id: 1, date: TODAY, time: "09:14", name: "Клиент 1", phone: "+79990000001", email: "client1@example.com", subject: "Заявка от клиента 1", text: "Текст обращения клиента 1", status: "Новый", files: [], reply: "" },
+  { id: 2, date: TODAY, time: "09:41", name: "Клиент 2", phone: "+79990000002", email: "client2@example.com", subject: "Заявка от клиента 2", text: "Текст обращения клиента 2", status: "Новый", files: [], reply: "" },
+  { id: 3, date: TODAY, time: "10:06", name: "Клиент 3", phone: "+79990000003", email: "client3@example.com", subject: "Заявка от клиента 3", text: "Текст обращения клиента 3", status: "Новый", files: [], reply: "" },
+  { id: 4, date: TODAY, time: "11:22", name: "Клиент 4", phone: "+79990000004", email: "client4@example.com", subject: "Заявка от клиента 4", text: "Текст обращения клиента 4", status: "Новый", files: [{ name: "схема.pdf", size: "180 КБ" }], reply: "" },
+  { id: 5, date: TODAY, time: "12:03", name: "Клиент 5", phone: "+79990000005", email: "client5@example.com", subject: "Заявка от клиента 5", text: "Текст обращения клиента 5", status: "Новый", files: [], reply: "" }
+];
+
+todayEl.textContent = formatISODate(TODAY);
+
+function isMobile() { return mobileMq.matches; }
+function reducedMotion() { return reduceMq.matches; }
+
+function stopLoop() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = 0;
+  lastTime = 0;
+}
+
+function applyReduced() {
+  window.clearTimeout(hideTimer);
+  detail.style.transform = "none";
+  if (!isMobile()) {
+    detail.style.opacity = "";
+    detail.style.visibility = "";
+    detail.style.pointerEvents = "";
+    return;
+  }
+  if (sheetOpen) {
+    var wasHidden = detail.style.visibility === "hidden";
+    detail.style.visibility = "visible";
+    detail.style.pointerEvents = "auto";
+    if (wasHidden) {
+      detail.style.opacity = "0";
+      void detail.offsetWidth;
+    }
+    detail.style.opacity = "1";
+  } else {
+    detail.style.opacity = "0";
+    detail.style.pointerEvents = "none";
+    hideTimer = window.setTimeout(function () {
+      if (!sheetOpen && reducedMotion() && isMobile()) detail.style.visibility = "hidden";
+    }, 180);
+  }
+}
+
+function applyMotion() {
+  if (!isMobile()) {
+    detail.style.transform = "";
+    detail.style.opacity = "";
+    detail.style.visibility = "";
+    detail.style.pointerEvents = "";
+    return;
+  }
+  if (reducedMotion()) {
+    applyReduced();
+    return;
+  }
+  detail.style.opacity = "1";
+  detail.style.transform = "translate3d(" + pos + "%,0,0)";
+  var showing = sheetOpen || pos < 99.7;
+  detail.style.visibility = showing ? "visible" : "hidden";
+  detail.style.pointerEvents = showing ? "auto" : "none";
+}
+
+/* Критическая пружина: ω = 2π / 0.35, ζ = 1. Новый вызов не сбрасывает сдвиг. */
+function tick(now) {
+  var dt = lastTime ? Math.min((now - lastTime) / 1000, 0.048) : 1 / 60;
+  lastTime = now;
+  var x = pos - target;
+  var decay = Math.exp(-OMEGA * dt);
+  var B = vel + OMEGA * x;
+  pos = target + (x + B * dt) * decay;
+  vel = (vel - OMEGA * B * dt) * decay;
+  if (Math.abs(pos - target) < 0.05 && Math.abs(vel) < 0.1) {
+    pos = target;
+    vel = 0;
+    applyMotion();
+    stopLoop();
+    return;
+  }
+  applyMotion();
+  rafId = requestAnimationFrame(tick);
+}
+
+function springTo(next) {
+  target = next;
+  if (!isMobile() || reducedMotion()) {
+    stopLoop();
+    pos = next;
+    vel = 0;
+    if (reducedMotion()) applyReduced();
+    else applyMotion();
+    return;
+  }
+  detail.style.visibility = "visible";
+  detail.style.pointerEvents = "auto";
+  detail.style.opacity = "1";
+  if (rafId) return;
+  if (Math.abs(pos - target) < 0.04 && Math.abs(vel) < 0.04) {
+    pos = target;
+    vel = 0;
+    applyMotion();
+    return;
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function openSheet() {
+  if (!isMobile()) return;
+  var row = rowsEl.querySelector(".row.is-selected");
+  returnFocus = row;
+  if (row) {
+    var rect = row.getBoundingClientRect();
+    detail.style.transformOrigin = "100% " + (rect.top + rect.height / 2) + "px";
+  } else {
+    detail.style.transformOrigin = "100% 50%";
+  }
+  sheetOpen = true;
+  springTo(0);
+  var closeBtn = detail.querySelector(".close-sheet");
+  if (closeBtn) closeBtn.focus();
+}
+
+function closeSheet() {
+  if (!isMobile() || !sheetOpen && pos >= 99.7 && !rafId) return;
+  sheetOpen = false;
+  springTo(100);
+  if (returnFocus && returnFocus.isConnected) returnFocus.focus();
+  else {
+    var row = rowsEl.querySelector(".row.is-selected");
+    if (row) row.focus();
+  }
+}
+
+function filtered() {
+  var status = filterStatus.value;
+  var from = filterFrom.value;
+  var to = filterTo.value;
+  var email = filterEmail.value.trim().toLowerCase();
+  var phone = filterPhone.value.trim().toLowerCase();
+  return slips.filter(function (slip) {
+    if (status && slip.status !== status) return false;
+    if (from && slip.date < from) return false;
+    if (to && slip.date > to) return false;
+    if (email && slip.email.toLowerCase().indexOf(email) === -1) return false;
+    if (phone && slip.phone.toLowerCase().indexOf(phone) === -1) return false;
+    return true;
+  });
+}
+
+function statusClass(status) {
+  if (status === "Новый") return "status-new";
+  if (status === "Обработан") return "status-done";
+  return "status-work";
+}
+
+function renderList() {
+  var items = filtered();
+  countEl.textContent = plural(items.length);
+  rowsEl.replaceChildren();
+  if (!items.length) {
+    var empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Таких заявок нет";
+    rowsEl.append(empty);
+    return;
+  }
+  items.forEach(function (slip) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "row press" + (slip.id === selectedId ? " is-selected" : "");
+    btn.dataset.id = String(slip.id);
+    if (slip.id === selectedId) btn.setAttribute("aria-current", "true");
+    var mark = document.createElement("span");
+    mark.className = "mark";
+    mark.setAttribute("aria-hidden", "true");
+    var idCell = document.createElement("span");
+    idCell.className = "mono id-cell";
+    idCell.textContent = String(slip.id);
+    var timeCell = document.createElement("span");
+    timeCell.className = "mono";
+    timeCell.textContent = slip.time;
+    var nameCell = document.createElement("span");
+    nameCell.className = "ellipsis col-name";
+    nameCell.textContent = slip.name;
+    var subjectCell = document.createElement("span");
+    subjectCell.className = "ellipsis subject-cell";
+    subjectCell.textContent = slip.subject;
+    var statusCell = document.createElement("span");
+    statusCell.className = "ellipsis " + statusClass(slip.status);
+    statusCell.textContent = slip.status;
+    btn.append(mark, idCell, timeCell, nameCell, subjectCell, statusCell);
+    rowsEl.append(btn);
+  });
+}
+
+function kvRow(dl, label, value, mono) {
+  var dt = document.createElement("dt");
+  dt.textContent = label;
+  var dd = document.createElement("dd");
+  if (mono) dd.className = "mono";
+  dd.textContent = value;
+  dl.append(dt, dd);
+}
+
+function renderDetail() {
+  var slip = null;
+  for (var i = 0; i < slips.length; i++) {
+    if (slips[i].id === selectedId) slip = slips[i];
+  }
+  var hadFocus = document.activeElement && detail.contains(document.activeElement);
+  var focusStatus = "";
+  if (hadFocus && document.activeElement.dataset && document.activeElement.dataset.st) {
+    focusStatus = document.activeElement.dataset.st;
+  }
+  var keepScroll = slip && slip.id === renderedId;
+  detail.replaceChildren();
+  if (!slip) return;
+
+  var top = document.createElement("div");
+  top.className = "detail-top";
+  var idEl = document.createElement("div");
+  idEl.className = "mono detail-id";
+  idEl.textContent = "№ " + slip.id;
+  var timeEl = document.createElement("div");
+  timeEl.className = "mono detail-time";
+  timeEl.textContent = slip.time;
+  var closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "btn press close-sheet";
+  closeBtn.textContent = "Закрыть";
+  closeBtn.addEventListener("click", closeSheet);
+  top.append(idEl, timeEl, closeBtn);
+
+  var body = document.createElement("div");
+  body.className = "detail-body";
+  var title = document.createElement("h2");
+  title.id = "detail-title";
+  title.textContent = slip.subject;
+  body.append(title);
+
+  if (slip.id === noticeId) {
+    var note = document.createElement("p");
+    note.className = "notice";
+    note.setAttribute("role", "status");
+    note.textContent = "Заявка принята. Ответим в эту же очередь.";
+    body.append(note);
+  }
+
+  var dl = document.createElement("dl");
+  dl.className = "kv";
+  kvRow(dl, "Дата", formatISODate(slip.date), false);
+  kvRow(dl, "Имя", slip.name, false);
+  kvRow(dl, "Телефон", slip.phone, true);
+  kvRow(dl, "Почта", slip.email, false);
+  body.append(dl);
+
+  var textLabel = document.createElement("p");
+  textLabel.className = "block-label";
+  textLabel.textContent = "Текст";
+  var text = document.createElement("p");
+  text.className = "body-text";
+  text.textContent = slip.text;
+  body.append(textLabel, text);
+
+  if (slip.files.length) {
+    var fileLabel = document.createElement("p");
+    fileLabel.className = "block-label";
+    fileLabel.textContent = "Вложение";
+    body.append(fileLabel);
+    slip.files.forEach(function (file) {
+      var line = document.createElement("p");
+      line.className = "file-line";
+      line.textContent = file.name + ", " + file.size;
+      body.append(line);
+    });
+  }
+
+  var statusLabel = document.createElement("p");
+  statusLabel.className = "block-label";
+  statusLabel.textContent = "Статус";
+  var group = document.createElement("div");
+  group.className = "status-group";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", "Статус");
+  STATUSES.forEach(function (st) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn press status-btn";
+    b.textContent = st;
+    b.dataset.st = st;
+    b.setAttribute("aria-pressed", slip.status === st ? "true" : "false");
+    b.addEventListener("click", function () {
+      if (st === "Обработан" && !slip.reply) slip.reply = "только что";
+      slip.status = st;
+      renderList();
+      renderDetail();
+    });
+    group.append(b);
+  });
+  var statusWrap = document.createElement("div");
+  statusWrap.className = "status-row";
+  statusWrap.append(statusLabel, group);
+  body.append(statusWrap);
+
+  if (slip.reply && slip.status === "Обработан") {
+    var reply = document.createElement("p");
+    reply.className = "reply";
+    reply.textContent = "Ответ: " + slip.reply;
+    body.append(reply);
+  }
+
+  detail.append(top, body);
+  renderedId = slip.id;
+  if (!keepScroll) detail.scrollTop = 0;
+  if (focusStatus) {
+    var again = detail.querySelector('[data-st="' + focusStatus + '"]');
+    if (again) again.focus();
+  }
+}
+
+function setNav(name) {
+  var buttons = document.querySelectorAll("[data-nav]");
+  buttons.forEach(function (btn) {
+    if (btn.getAttribute("data-nav") === name) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+}
+
+function renderWho() {
+  if (!currentUser) return;
+  whoName.textContent = currentUser.name;
+  whoMail.textContent = currentUser.email;
+}
+
+function showView(name) {
+  if (name === "login") {
+    shell.hidden = true;
+    loginView.hidden = false;
+    setNav("");
+    var email = document.getElementById("login-email");
+    if (email) email.focus();
+    return;
+  }
+  shell.hidden = false;
+  loginView.hidden = true;
+  var queue = name === "queue";
+  listPane.hidden = !queue;
+  widgetView.hidden = queue;
+  if (queue) {
+    detail.hidden = false;
+    applyMotion();
+  } else {
+    sheetOpen = false;
+    pos = 100;
+    target = 100;
+    vel = 0;
+    stopLoop();
+    detail.hidden = true;
+  }
+  setNav(name);
+}
+
+function setFieldError(input, errorEl, text) {
+  if (text) {
+    errorEl.hidden = false;
+    errorEl.textContent = text;
+    input.setAttribute("aria-invalid", "true");
+    input.setAttribute("aria-describedby", errorEl.id);
+  } else {
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+    input.removeAttribute("aria-invalid");
+    input.removeAttribute("aria-describedby");
+  }
+}
+
+function clearFilters() {
+  filterStatus.value = "";
+  filterFrom.value = "";
+  filterTo.value = "";
+  filterEmail.value = "";
+  filterPhone.value = "";
+}
+
+function fromEvent(event, selector) {
+  var node = event.target;
+  if (!node) return null;
+  if (node.nodeType !== 1) node = node.parentElement;
+  if (!node || !node.closest) return null;
+  return node.closest(selector);
+}
+
+rowsEl.addEventListener("click", function (event) {
+  var btn = fromEvent(event, ".row");
+  if (!btn) return;
+  selectedId = Number(btn.dataset.id);
+  var all = rowsEl.querySelectorAll(".row");
+  for (var i = 0; i < all.length; i++) {
+    var on = Number(all[i].dataset.id) === selectedId;
+    all[i].classList.toggle("is-selected", on);
+    if (on) all[i].setAttribute("aria-current", "true");
+    else all[i].removeAttribute("aria-current");
+  }
+  renderDetail();
+  if (isMobile()) openSheet();
+});
+
+document.querySelectorAll("[data-nav]").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    showView(btn.getAttribute("data-nav"));
+  });
+});
+
+document.getElementById("logout").addEventListener("click", function () {
+  currentUser = null;
+  showView("login");
+});
+
+[filterStatus, filterFrom, filterTo, filterEmail, filterPhone].forEach(function (el) {
+  el.addEventListener("input", renderList);
+  el.addEventListener("change", renderList);
+});
+
+document.addEventListener("pointerdown", function (event) {
+  if (reducedMotion()) return;
+  var el = fromEvent(event, ".press");
+  if (!el) return;
+  el.classList.add("is-pressed");
+});
+
+function releasePress() {
+  document.querySelectorAll(".is-pressed").forEach(function (el) {
+    el.classList.remove("is-pressed");
+  });
+}
+
+document.addEventListener("pointerup", releasePress);
+document.addEventListener("pointercancel", releasePress);
+
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape" && isMobile() && (sheetOpen || pos < 99.7)) {
+    event.preventDefault();
+    closeSheet();
+    return;
+  }
+  if (event.key !== "Tab" || !isMobile() || !sheetOpen) return;
+  var nodes = Array.prototype.slice.call(detail.querySelectorAll("button, input, select, textarea")).filter(function (el) {
+    return el.getClientRects().length > 0;
+  });
+  if (!nodes.length) return;
+  var first = nodes[0];
+  var last = nodes[nodes.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+
+mobileMq.addEventListener("change", function () {
+  stopLoop();
+  window.clearTimeout(hideTimer);
+  if (!isMobile()) {
+    sheetOpen = false;
+    pos = 0;
+    target = 0;
+    vel = 0;
+    if (!detail.hidden) applyMotion();
+    return;
+  }
+  pos = 100;
+  target = 100;
+  vel = 0;
+  sheetOpen = false;
+  if (!detail.hidden) applyMotion();
+});
+
+reduceMq.addEventListener("change", function () {
+  stopLoop();
+  if (!isMobile()) {
+    applyMotion();
+    return;
+  }
+  pos = sheetOpen ? 0 : 100;
+  target = pos;
+  vel = 0;
+  if (reducedMotion()) applyReduced();
+  else applyMotion();
+});
+
+var loginForm = document.getElementById("login-form");
+var loginEmail = document.getElementById("login-email");
+var loginPassword = document.getElementById("login-password");
+var loginEmailError = document.getElementById("login-email-error");
+var loginPasswordError = document.getElementById("login-password-error");
+
+loginForm.addEventListener("submit", function (event) {
+  event.preventDefault();
+  var email = loginEmail.value.trim().toLowerCase();
+  var password = loginPassword.value;
+  var emailError = "";
+  var passwordError = "";
+  if (!email) emailError = "Укажите почту";
+  if (!password) passwordError = "Укажите пароль";
+  var user = null;
+  if (!emailError) {
+    for (var i = 0; i < USERS.length; i++) {
+      if (USERS[i].email === email) user = USERS[i];
+    }
+    if (!user) emailError = "Такой почты нет";
+    else if (!passwordError && user.password !== password) passwordError = "Неверный пароль";
+  }
+  setFieldError(loginEmail, loginEmailError, emailError);
+  setFieldError(loginPassword, loginPasswordError, passwordError);
+  if (emailError) {
+    loginEmail.focus();
+    return;
+  }
+  if (passwordError) {
+    loginPassword.focus();
+    return;
+  }
+  currentUser = user;
+  renderWho();
+  showView("queue");
+  var row = rowsEl.querySelector(".row.is-selected");
+  if (row) row.focus();
+});
+
+loginEmail.addEventListener("input", function () {
+  setFieldError(loginEmail, loginEmailError, "");
+});
+loginPassword.addEventListener("input", function () {
+  setFieldError(loginPassword, loginPasswordError, "");
+});
+
+var widgetForm = document.getElementById("widget-form");
+var wName = document.getElementById("w-name");
+var wPhone = document.getElementById("w-phone");
+var wEmail = document.getElementById("w-email");
+var wSubject = document.getElementById("w-subject");
+var wMessage = document.getElementById("w-message");
+var wFiles = document.getElementById("w-files");
+var wNameError = document.getElementById("w-name-error");
+var wPhoneError = document.getElementById("w-phone-error");
+var wEmailError = document.getElementById("w-email-error");
+var wSubjectError = document.getElementById("w-subject-error");
+var wMessageError = document.getElementById("w-message-error");
+var wFilesError = document.getElementById("w-files-error");
+var widgetStatus = document.getElementById("widget-status");
+var fileNames = document.getElementById("file-names");
+var pickFiles = document.getElementById("pick-files");
+
+function renderChosenFiles() {
+  fileNames.replaceChildren();
+  var files = wFiles.files ? Array.prototype.slice.call(wFiles.files) : [];
+  if (!files.length) {
+    var li = document.createElement("li");
+    li.textContent = "Файлы не выбраны";
+    fileNames.append(li);
+    return;
+  }
+  files.forEach(function (file) {
+    var item = document.createElement("li");
+    item.textContent = file.name + ", " + formatSize(file.size);
+    fileNames.append(item);
+  });
+}
+
+pickFiles.addEventListener("click", function () { wFiles.click(); });
+wFiles.addEventListener("change", function () {
+  setFieldError(wFiles, wFilesError, "");
+  renderChosenFiles();
+});
+
+[wName, wPhone, wEmail, wSubject, wMessage].forEach(function (input) {
+  input.addEventListener("input", function () {
+    widgetStatus.hidden = true;
+    widgetStatus.textContent = "";
+  });
+});
+
+wName.addEventListener("input", function () { setFieldError(wName, wNameError, ""); });
+wPhone.addEventListener("input", function () { setFieldError(wPhone, wPhoneError, ""); });
+wEmail.addEventListener("input", function () { setFieldError(wEmail, wEmailError, ""); });
+wSubject.addEventListener("input", function () { setFieldError(wSubject, wSubjectError, ""); });
+wMessage.addEventListener("input", function () { setFieldError(wMessage, wMessageError, ""); });
+
+widgetForm.addEventListener("submit", function (event) {
+  event.preventDefault();
+  var name = wName.value.trim();
+  var phone = wPhone.value.trim();
+  var email = wEmail.value.trim();
+  var subject = wSubject.value.trim();
+  var message = wMessage.value.trim();
+  var files = wFiles.files ? Array.prototype.slice.call(wFiles.files) : [];
+  var nameError = name ? "" : "Укажите имя";
+  var phoneError = "";
+  if (!/^\+\d+$/.test(phone)) phoneError = "Номер в формате +79991234567";
+  else if (slips.some(function (slip) { return slip.phone === phone; })) {
+    phoneError = "С этого телефона заявка сегодня уже есть.";
+  }
+  var emailError = "";
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) emailError = "Почта указана неверно.";
+  var subjectError = subject ? "" : "Укажите тему";
+  var messageError = message ? "" : "Напишите сообщение";
+  var fileError = "";
+  if (files.length > 5) fileError = "Не больше пяти файлов.";
+  if (files.some(function (file) { return file.size > 10 * 1024 * 1024; })) {
+    fileError = fileError ? fileError + " Каждый файл не больше 10 МБ." : "Каждый файл не больше 10 МБ.";
+  }
+  setFieldError(wName, wNameError, nameError);
+  setFieldError(wPhone, wPhoneError, phoneError);
+  setFieldError(wEmail, wEmailError, emailError);
+  setFieldError(wSubject, wSubjectError, subjectError);
+  setFieldError(wMessage, wMessageError, messageError);
+  setFieldError(wFiles, wFilesError, fileError);
+  if (nameError || phoneError || emailError || subjectError || messageError || fileError) {
+    var first = nameError ? wName : phoneError ? wPhone : emailError ? wEmail : subjectError ? wSubject : messageError ? wMessage : pickFiles;
+    first.focus();
+    return;
+  }
+  var nextId = slips.reduce(function (max, slip) { return Math.max(max, slip.id); }, 0) + 1;
+  var slip = {
+    id: nextId,
+    date: isoToday(),
+    time: clockNow(),
+    name: name,
+    phone: phone,
+    email: email,
+    subject: subject,
+    text: message,
+    status: "Новый",
+    files: files.map(function (file) { return { name: file.name, size: formatSize(file.size) }; }),
+    reply: ""
+  };
+  slips.push(slip);
+  selectedId = slip.id;
+  noticeId = slip.id;
+  queueNotice.hidden = false;
+  queueNotice.textContent = "Заявка принята. Ответим в эту же очередь.";
+  widgetForm.reset();
+  renderChosenFiles();
+  widgetStatus.hidden = false;
+  widgetStatus.textContent = "Заявка принята. Ответим в эту же очередь.";
+  clearFilters();
+  renderList();
+  showView("queue");
+  renderDetail();
+  if (isMobile()) openSheet();
+  else {
+    var row = rowsEl.querySelector(".row.is-selected");
+    if (row) row.focus();
+  }
+});
+
+renderWho();
+renderChosenFiles();
+renderList();
+renderDetail();
+showView("queue");
+applyMotion();
+</script>
+</body>
+</html>

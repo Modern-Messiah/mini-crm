@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<!--
+Мини-CRM. Прототип одной ночной стойки, не лендинг.
+Допущения: очередь открыта сразу и не запирается паролем; верный вход меняет «Вход» на «Выйти» и пишет роль. Новая заявка получает следующий номер и местное время. День, неделя, месяц и всего равны числу бланков, потому что все они за сегодня. Вложение только у бланка 4: «схема.pdf, 180 КБ». Повтор телефона сверяется с номерами, уже лежащими в очереди этой сессии.
+Цвет не взят у звукового сервиса и не является неоновой сеткой. Сцена — стойка администратора после закрытия: тёплый почти чёрный фон. Бумага тёплая, oklch(0.96 0.02 85), светлота около 0.96, хроматичность ниже 0.03. Чернила почти чёрные. Единственный акцент — янтарный свет настольной лампы, oklch(0.78 0.145 78), хроматичность около 0.145: только текущий статус, кнопка отправки и активная отметка ритма. Без фиолетового, без синего свечения, без градиентной сетки. Ошибка — тёмные чернила, не второй акцент.
+Шрифт: Unbounded (кириллица, геометрический, тяжёлый) для крупного слова и номеров; Manrope (кириллица) для набора и интерфейса. Не Inter, не Geist, не Newsreader, не Fraunces, не Archivo.
+Ритм — неподвижные вертикальные отметки табеля, по одной на каждый бланк (сначала 09:14, 09:41, 10:06, 11:22, 12:03). Это не эквалайзер и не суточная шкала.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Очередь — Мини-CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: oklch(0.145 0.012 75);
+    --raise: oklch(0.19 0.014 75);
+    --paper: oklch(0.96 0.02 85);
+    --paper-2: oklch(0.985 0.012 85);
+    --ink: oklch(0.22 0.022 55);
+    --ink-soft: oklch(0.40 0.025 55);
+    --text: oklch(0.96 0.012 85);
+    --text-dim: oklch(0.80 0.014 85);
+    --amber: oklch(0.78 0.145 78);
+    --line: oklch(0.96 0.012 85 / 0.22);
+    --hair-paper: oklch(0.42 0.02 60 / 0.35);
+    --danger: oklch(0.40 0.11 28);
+    --pad: 28px;
+    --bar: 48px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  html {
+    background: var(--bg);
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Manrope, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.45;
+    letter-spacing: 0;
+  }
+
+  body.lock { overflow: hidden; }
+
+  button, input, textarea { font: inherit; color: inherit; }
+  button {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:active { transform: scale(0.97); }
+  h1, h2, p { margin: 0; }
+  h1, h2, .num, .brand-name, .panel-num {
+    font-family: Unbounded, Manrope, "Segoe UI", sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  :focus:not(:focus-visible) { outline: none; }
+  :focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 3px;
+  }
+  .sheet :focus-visible,
+  .panel :focus-visible { outline-color: var(--ink); }
+
+  ::selection { background: var(--amber); color: var(--ink); }
+  ::placeholder { color: oklch(0.42 0.025 55); opacity: 1; }
+
+  .top {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: var(--bar);
+    padding: 0 var(--pad);
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+  .brand-name { font-weight: 500; font-size: 15px; }
+  .role { font-size: 14px; color: var(--text-dim); white-space: nowrap; }
+  nav { display: flex; align-items: center; gap: 2px; }
+  nav button {
+    padding: 14px 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  nav button[aria-current="page"] {
+    color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--text);
+  }
+
+  .mast {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 8px var(--pad) 10px;
+  }
+  #view-queue {
+    position: relative;
+    z-index: 25;
+  }
+  #view-queue h1 {
+    font-weight: 700;
+    font-size: clamp(44px, 7.2vw, 104px);
+    line-height: 0.92;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .caption {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 28px;
+    row-gap: 0;
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text);
+  }
+  .caption p { margin: 0; }
+  .session { grid-column: 1 / -1; margin-top: 4px; color: var(--text-dim); }
+
+  .rhythm {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 0 var(--pad);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .mark {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 0 12px;
+    color: var(--text-dim);
+  }
+  .tick {
+    display: block;
+    width: 2px;
+    height: 28px;
+    background: var(--text);
+  }
+  .mark.is-active .tick { width: 4px; background: var(--amber); }
+  .mark.is-active { color: var(--text); }
+  .tick-time {
+    font-size: 12px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 10px var(--pad);
+  }
+  .tools-label { font-size: 14px; color: var(--text-dim); }
+  .filters { display: flex; flex-wrap: wrap; gap: 2px; }
+  .filters button {
+    padding: 8px 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+  }
+  .filters button[aria-pressed="true"] {
+    color: var(--text);
+    box-shadow: inset 0 -1px 0 currentColor;
+  }
+
+  .colhead, .slip {
+    display: grid;
+    grid-template-columns: 56px 72px minmax(0, 1.1fr) 156px minmax(0, 1.4fr) 140px;
+    column-gap: 16px;
+    align-items: center;
+  }
+  .colhead {
+    padding: 4px var(--pad) 8px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--text-dim);
+  }
+  .slip {
+    width: 100%;
+    text-align: left;
+    padding: 16px var(--pad);
+    border-bottom: 1px solid var(--line);
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.35;
+  }
+  .slip:hover { background: var(--raise); }
+  .slip.is-open { background: oklch(0.21 0.016 75); }
+  .slip:focus-visible { outline-offset: -3px; }
+  .num {
+    font-weight: 500;
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+  .when, .tel { font-variant-numeric: tabular-nums; }
+  .who { font-weight: 600; }
+  .topic, .who, .tel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .lamp {
+    width: 10px;
+    height: 14px;
+    background: var(--amber);
+    flex: none;
+  }
+  .empty {
+    margin: 0;
+    padding: 18px var(--pad) 8px;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .sheet-wrap {
+    min-height: calc(100vh - var(--bar));
+    min-height: calc(100dvh - var(--bar));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px var(--pad) 48px;
+  }
+  .sheet {
+    width: min(640px, 100%);
+    flex-shrink: 0;
+    margin-top: auto;
+    margin-bottom: auto;
+    background: var(--paper);
+    color: var(--ink);
+    color-scheme: light;
+    padding: 32px 32px 28px;
+  }
+  .sheet-narrow { width: min(400px, 100%); }
+  .sheet h1 {
+    font-weight: 700;
+    font-size: clamp(36px, 5vw, 56px);
+    line-height: 0.9;
+    color: var(--ink);
+  }
+  .lead {
+    margin: 10px 0 22px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+  .field { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 14px; }
+  .field label, .k {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+  .hint, .picked, .cred {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+  .hint { margin: 0; }
+  .picked { margin: 0; white-space: pre-line; color: var(--ink); }
+  .cred { margin: 18px 0 0; }
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  textarea {
+    width: 100%;
+    border: 1px solid oklch(0.45 0.02 60 / 0.55);
+    background: var(--paper-2);
+    color: var(--ink);
+    padding: 10px 12px;
+    border-radius: 0;
+    line-height: 1.45;
+  }
+  textarea { resize: vertical; min-height: 96px; }
+  .err {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--danger);
+  }
+  .err:empty { display: none; }
+  .success {
+    margin: 0 0 14px;
+    font-size: 16px;
+    line-height: 1.45;
+    color: var(--ink);
+  }
+  .ghost {
+    border: 1px solid oklch(0.35 0.02 55);
+    color: var(--ink);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .submit {
+    width: 100%;
+    margin-top: 6px;
+    border: 0;
+    background: var(--amber);
+    color: var(--ink);
+    padding: 14px 16px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: oklch(0.12 0.012 70 / 0.68);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms linear;
+  }
+  .scrim.is-on { opacity: 1; pointer-events: auto; }
+
+  .panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    max-height: calc(100vh - 56px);
+    max-height: calc(100dvh - 56px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: var(--paper);
+    color: var(--ink);
+    color-scheme: light;
+    border-top: 1px solid oklch(0.55 0.02 60 / 0.45);
+    border-radius: 0;
+  }
+  .panel-bar, .panel-body { padding-left: var(--pad); padding-right: var(--pad); }
+  .panel-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 18px;
+    max-width: 920px;
+  }
+  .panel-num { font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .linkish {
+    padding: 8px 0 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .panel-body { max-width: 920px; padding-top: 6px; padding-bottom: 32px; }
+  .panel h2 {
+    font-weight: 700;
+    font-size: clamp(32px, 4vw, 48px);
+    line-height: 0.95;
+    color: var(--ink);
+  }
+  .panel-time {
+    margin-top: 8px;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  .block { padding: 16px 0; border-top: 1px solid var(--hair-paper); margin-top: 16px; }
+  .v {
+    font-size: 16px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+  .status-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .status-row button {
+    border: 1px solid oklch(0.35 0.02 55);
+    color: var(--ink);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .status-row button[aria-pressed="true"] {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: var(--ink);
+  }
+  .answer { margin-top: 4px; font-size: 16px; line-height: 1.45; }
+
+  @media (max-width: 860px) {
+    .colhead { display: none; }
+    .slip {
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "num when"
+        "who who"
+        "topic topic"
+        "tel status";
+      row-gap: 4px;
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
+    .num { grid-area: num; }
+    .when { grid-area: when; justify-self: end; }
+    .who { grid-area: who; white-space: normal; }
+    .topic { grid-area: topic; white-space: normal; }
+    .tel { grid-area: tel; white-space: normal; }
+    .status { grid-area: status; }
+  }
+
+  @media (max-width: 720px) {
+    :root { --pad: 16px; }
+    .mast { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .caption { margin: 0; column-gap: 18px; }
+    .split { grid-template-columns: 1fr; }
+    .sheet { padding: 24px 18px 22px; }
+  }
+
+  @media (max-width: 420px) {
+    nav button { padding: 14px 7px; }
+    .role {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scrim { transition: none; }
+    .panel { transition: opacity 160ms linear; }
+    button:active { transform: none; }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .scrim { background: oklch(0.145 0.012 75); }
+  }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="brand-name">Мини-CRM</span>
+      <span class="role" id="role" hidden></span>
+    </div>
+    <nav aria-label="Разделы">
+      <button type="button" data-view="queue" aria-current="page">Очередь</button>
+      <button type="button" data-view="widget">Виджет</button>
+      <button type="button" id="auth-btn">Вход</button>
+    </nav>
+  </header>
+
+  <main id="view-queue">
+    <div class="mast">
+      <h1 id="queue-heading" tabindex="-1">Очередь</h1>
+      <div class="caption" aria-live="polite">
+        <p>День <span id="c-day">5</span></p>
+        <p>Неделя <span id="c-week">5</span></p>
+        <p>Месяц <span id="c-month">5</span></p>
+        <p>Всего <span id="c-all">5</span></p>
+        <p class="session" id="session" hidden></p>
+      </div>
+    </div>
+    <div class="rhythm" id="rhythm" role="group" aria-label="Время заявок"></div>
+    <div class="tools">
+      <span class="tools-label">Статус</span>
+      <div class="filters" role="group" aria-label="Фильтр по статусу">
+        <button type="button" data-filter="Все" aria-pressed="true">Все</button>
+        <button type="button" data-filter="Новый" aria-pressed="false">Новый</button>
+        <button type="button" data-filter="В работе" aria-pressed="false">В работе</button>
+        <button type="button" data-filter="Обработан" aria-pressed="false">Обработан</button>
+      </div>
+    </div>
+    <div class="colhead" aria-hidden="true">
+      <span>№</span>
+      <span>Время</span>
+      <span>Имя</span>
+      <span>Телефон</span>
+      <span>Тема</span>
+      <span>Статус</span>
+    </div>
+    <div id="register"></div>
+    <p class="empty" id="empty" hidden role="status"></p>
+  </main>
+
+  <section id="view-widget" class="sheet-wrap" hidden>
+    <form class="sheet" id="widget-form" novalidate>
+      <h1>Заявка</h1>
+      <p class="lead">Заполните бланк. Заявка встанет в очередь.</p>
+      <p class="success" id="w-success" hidden role="status">Заявка принята. Ответим в эту же очередь.</p>
+      <div class="field">
+        <label for="w-name">Имя</label>
+        <input id="w-name" name="name" type="text" autocomplete="name" required aria-describedby="w-name-err">
+        <p class="err" id="w-name-err" aria-live="polite"></p>
+      </div>
+      <div class="field">
+        <label for="w-phone">Телефон</label>
+        <input id="w-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79991234567" required aria-describedby="w-phone-err">
+        <p class="err" id="w-phone-err" aria-live="polite"></p>
+      </div>
+      <div class="field">
+        <label for="w-email">Почта</label>
+        <input id="w-email" name="email" type="email" autocomplete="email" required aria-describedby="w-email-err">
+        <p class="err" id="w-email-err" aria-live="polite"></p>
+      </div>
+      <div class="field">
+        <label for="w-topic">Тема</label>
+        <input id="w-topic" name="topic" type="text" required aria-describedby="w-topic-err">
+        <p class="err" id="w-topic-err" aria-live="polite"></p>
+      </div>
+      <div class="field">
+        <label for="w-text">Сообщение</label>
+        <textarea id="w-text" name="text" rows="4" required aria-describedby="w-text-err"></textarea>
+        <p class="err" id="w-text-err" aria-live="polite"></p>
+      </div>
+      <div class="field">
+        <label for="w-files">Файлы</label>
+        <button type="button" class="ghost" id="file-btn">Выбрать файлы</button>
+        <input id="w-files" name="files" type="file" multiple hidden aria-describedby="w-files-hint w-files-err">
+        <p class="hint" id="w-files-hint">до 5 файлов, каждый не больше 10 МБ</p>
+        <p class="picked" id="w-picked"></p>
+        <p class="err" id="w-files-err" aria-live="polite"></p>
+      </div>
+      <button type="submit" class="submit">Отправить</button>
+    </form>
+  </section>
+
+  <section id="view-login" class="sheet-wrap" hidden>
+    <form class="sheet sheet-narrow" id="login-form" novalidate>
+      <h1>Вход</h1>
+      <p class="lead">Почта и пароль сотрудника.</p>
+      <div class="field">
+        <label for="l-email">Почта</label>
+        <input id="l-email" name="email" type="email" autocomplete="username" required aria-describedby="l-email-err">
+        <p class="err" id="l-email-err" aria-live="polite"></p>
+      </div>
+      <div class="field">
+        <label for="l-password">Пароль</label>
+        <input id="l-password" name="password" type="password" autocomplete="current-password" required aria-describedby="l-password-err">
+        <p class="err" id="l-password-err" aria-live="polite"></p>
+      </div>
+      <button type="submit" class="submit">Войти</button>
+      <p class="cred">Администратор: admin@example.com<br>Менеджер: manager@example.com<br>Пароль: password</p>
+    </form>
+  </section>
+
+  <div class="scrim" id="scrim"></div>
+  <section class="panel" id="panel" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="panel-title" hidden>
+    <div class="panel-bar">
+      <p class="panel-num" id="panel-num">01</p>
+      <button type="button" class="linkish" id="close-btn">Закрыть</button>
+    </div>
+    <div class="panel-body">
+      <h2 id="panel-title">Клиент</h2>
+      <p class="panel-time" id="panel-time"></p>
+      <div class="block">
+        <p class="k">Тема</p>
+        <p class="v" id="panel-topic"></p>
+      </div>
+      <div class="block">
+        <p class="k">Текст</p>
+        <p class="v" id="panel-text"></p>
+      </div>
+      <div class="block split">
+        <div>
+          <p class="k">Телефон</p>
+          <p class="v" id="panel-phone"></p>
+        </div>
+        <div>
+          <p class="k">Почта</p>
+          <p class="v" id="panel-email"></p>
+        </div>
+      </div>
+      <div class="block">
+        <p class="k">Статус</p>
+        <div class="status-row" role="group" aria-label="Статус">
+          <button type="button" data-status="Новый" aria-pressed="true">Новый</button>
+          <button type="button" data-status="В работе" aria-pressed="false">В работе</button>
+          <button type="button" data-status="Обработан" aria-pressed="false">Обработан</button>
+        </div>
+      </div>
+      <div class="block" id="panel-files-wrap" hidden>
+        <p class="k">Вложение</p>
+        <p class="v" id="panel-files"></p>
+      </div>
+      <p class="answer" id="panel-answer" hidden>Ответ: только что</p>
+    </div>
+  </section>
+
+<script>
+(function () {
+  'use strict';
+
+  var TIMES = ['09:14', '09:41', '10:06', '11:22', '12:03'];
+  var tickets = [1, 2, 3, 4, 5].map(function (n) {
+    return {
+      n: n,
+      time: TIMES[n - 1],
+      name: 'Клиент ' + n,
+      phone: '+7999000000' + n,
+      email: 'client' + n + '@example.com',
+      topic: 'Заявка от клиента ' + n,
+      text: 'Текст обращения клиента ' + n,
+      status: 'Новый',
+      files: n === 4 ? [{ name: 'схема.pdf', size: '180 КБ' }] : [],
+      answered: false
+    };
+  });
+
+  var USERS = [
+    { email: 'admin@example.com', password: 'password', role: 'Администратор' },
+    { email: 'manager@example.com', password: 'password', role: 'Менеджер' }
+  ];
+
+  var statusFilter = 'Все';
+  var session = null;
+  var view = 'queue';
+  var openId = null;
+  var hoverId = null;
+  var openerN = null;
+  var panelOpen = false;
+  var hideTimer = 0;
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var panel = document.getElementById('panel');
+  var scrim = document.getElementById('scrim');
+  var spring = { y: 0, v: 0, target: 0, running: false, raf: 0, last: 0, rest: null };
+  var omega = (Math.PI * 2) / 0.35;
+
+  function esc(value) {
+    return String(value).replace(/[&<>"']/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function visibleTickets() {
+    if (statusFilter === 'Все') return tickets.slice();
+    return tickets.filter(function (t) { return t.status === statusFilter; });
+  }
+
+  function renderCounts() {
+    var n = String(tickets.length);
+    ['c-day', 'c-week', 'c-month', 'c-all'].forEach(function (id) {
+      document.getElementById(id).textContent = n;
+    });
+  }
+
+  function renderList() {
+    var rows = visibleTickets();
+    var empty = document.getElementById('empty');
+    if (rows.length) {
+      empty.hidden = true;
+      empty.textContent = '';
+    } else {
+      empty.hidden = false;
+      empty.textContent = 'Таких заявок нет';
+    }
+    document.getElementById('register').innerHTML = rows.map(function (t) {
+      return '<button type="button" class="slip' + (t.n === openId ? ' is-open' : '') + '" data-n="' + t.n + '">' +
+        '<span class="num">' + pad(t.n) + '</span>' +
+        '<span class="when">' + esc(t.time) + '</span>' +
+        '<span class="who">' + esc(t.name) + '</span>' +
+        '<span class="tel">' + esc(t.phone) + '</span>' +
+        '<span class="topic">' + esc(t.topic) + '</span>' +
+        '<span class="status"><span class="lamp" aria-hidden="true"></span>' + esc(t.status) + '</span>' +
+      '</button>';
+    }).join('');
+  }
+
+  function activeMarkId() {
+    if (hoverId) return hoverId;
+    if (openId) return openId;
+    return tickets.length ? tickets[tickets.length - 1].n : 0;
+  }
+
+  function paintActiveMark() {
+    var id = activeMarkId();
+    document.querySelectorAll('.mark').forEach(function (mark) {
+      mark.classList.toggle('is-active', Number(mark.dataset.n) === id);
+    });
+  }
+
+  function renderRhythm() {
+    document.getElementById('rhythm').innerHTML = tickets.map(function (t) {
+      return '<button type="button" class="mark" data-n="' + t.n + '" aria-label="' + esc(t.time + ', ' + t.name) + '">' +
+        '<span class="tick" aria-hidden="true"></span>' +
+        '<span class="tick-time">' + esc(t.time) + '</span>' +
+      '</button>';
+    }).join('');
+    paintActiveMark();
+  }
+
+  function paintStatusButtons(status) {
+    panel.querySelectorAll('[data-status]').forEach(function (button) {
+      button.setAttribute('aria-pressed', button.dataset.status === status ? 'true' : 'false');
+    });
+  }
+
+  function fillPanel(ticket) {
+    document.getElementById('panel-num').textContent = pad(ticket.n);
+    document.getElementById('panel-title').textContent = ticket.name;
+    document.getElementById('panel-time').textContent = ticket.time;
+    document.getElementById('panel-topic').textContent = ticket.topic;
+    document.getElementById('panel-text').textContent = ticket.text;
+    document.getElementById('panel-phone').textContent = ticket.phone;
+    document.getElementById('panel-email').textContent = ticket.email;
+    var filesWrap = document.getElementById('panel-files-wrap');
+    var files = document.getElementById('panel-files');
+    if (ticket.files && ticket.files.length) {
+      filesWrap.hidden = false;
+      files.textContent = ticket.files.map(function (file) {
+        return file.name + ', ' + file.size;
+      }).join('\n');
+    } else {
+      filesWrap.hidden = true;
+      files.textContent = '';
+    }
+    document.getElementById('panel-answer').hidden = !(ticket.status === 'Обработан' && ticket.answered);
+    paintStatusButtons(ticket.status);
+  }
+
+  function applyTransform() {
+    panel.style.transform = 'translateY(' + spring.y.toFixed(3) + 'px)';
+  }
+
+  function readY() {
+    var match = /translateY\(([-\d.]+)px\)/.exec(panel.style.transform || '');
+    return match ? parseFloat(match[1]) : spring.y;
+  }
+
+  function stopSpring() {
+    spring.running = false;
+    spring.v = 0;
+    spring.rest = null;
+    spring.last = 0;
+    if (spring.raf) cancelAnimationFrame(spring.raf);
+    spring.raf = 0;
+  }
+
+  function tick(ts) {
+    if (!spring.running) return;
+    if (!spring.last) spring.last = ts;
+    var dt = (ts - spring.last) / 1000;
+    spring.last = ts;
+    if (dt < 0) dt = 0;
+    if (dt > 0.05) dt = 0.05;
+    var y0 = spring.y - spring.target;
+    var v0 = spring.v;
+    var decay = Math.exp(-omega * dt);
+    var A = y0;
+    var B = v0 + omega * y0;
+    var next = (A + B * dt) * decay;
+    spring.y = spring.target + next;
+    spring.v = (B - omega * (A + B * dt)) * decay;
+    if (Math.abs(next) < 0.4 && Math.abs(spring.v) < 0.4) {
+      spring.y = spring.target;
+      spring.v = 0;
+      applyTransform();
+      spring.running = false;
+      spring.last = 0;
+      var done = spring.rest;
+      spring.rest = null;
+      if (done) done();
+      return;
+    }
+    applyTransform();
+    spring.raf = requestAnimationFrame(tick);
+  }
+
+  function springTo(target, onRest) {
+    spring.target = target;
+    spring.rest = onRest || null;
+    if (!spring.running) {
+      spring.running = true;
+      spring.last = 0;
+      spring.raf = requestAnimationFrame(tick);
+    }
+  }
+
+  function placeOrigin(source, clientX) {
+    if (!source) return;
+    var row = source.getBoundingClientRect();
+    var sheet = panel.getBoundingClientRect();
+    var layoutTop = sheet.top - spring.y;
+    var x = (clientX == null ? row.left + row.width / 2 : clientX) - sheet.left;
+    var y = row.top + row.height / 2 - layoutTop;
+    panel.style.transformOrigin = x + 'px ' + y + 'px';
+  }
+
+  function finishHide() {
+    if (panelOpen) return;
+    panel.hidden = true;
+    panel.setAttribute('aria-hidden', 'true');
+    panel.style.opacity = '1';
+    scrim.classList.remove('is-on');
+    document.body.classList.remove('lock');
+  }
+
+  function openTicket(n, source, ev) {
+    var ticket = tickets.find(function (item) { return item.n === n; });
+    if (!ticket) return;
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = 0;
+    }
+    var reduce = reduceMotion.matches;
+    var firstOpen = !panelOpen && !spring.running;
+    openerN = n;
+    openId = n;
+    hoverId = n;
+    fillPanel(ticket);
+    panel.scrollTop = 0;
+    panelOpen = true;
+    panel.hidden = false;
+    panel.setAttribute('aria-hidden', 'false');
+    scrim.classList.add('is-on');
+    document.body.classList.add('lock');
+    var clientX = ev && typeof ev.clientX === 'number' && ev.clientX > 0 ? ev.clientX : null;
+    if (reduce) {
+      stopSpring();
+      spring.y = 0;
+      panel.style.transform = 'none';
+      panel.style.opacity = '0';
+      placeOrigin(source, clientX);
+      requestAnimationFrame(function () { panel.style.opacity = '1'; });
+    } else {
+      panel.style.opacity = '1';
+      if (firstOpen) {
+        spring.y = panel.offsetHeight;
+        spring.v = 0;
+        applyTransform();
+      } else {
+        spring.y = readY();
+      }
+      placeOrigin(source, clientX);
+      springTo(0);
+    }
+    renderList();
+    paintActiveMark();
+    document.getElementById('close-btn').focus({ preventScroll: true });
+  }
+
+  function closePanel(restoreFocus) {
+    if (!panelOpen && !spring.running) return;
+    var reduce = reduceMotion.matches;
+    var closedN = openerN;
+    panelOpen = false;
+    openId = null;
+    hoverId = null;
+    renderList();
+    paintActiveMark();
+    if (reduce) {
+      stopSpring();
+      panel.style.opacity = '0';
+      hideTimer = window.setTimeout(finishHide, 180);
+    } else {
+      spring.y = readY();
+      springTo(panel.offsetHeight || window.innerHeight, finishHide);
+    }
+    if (restoreFocus === false) return;
+    var row = closedN ? document.querySelector('.slip[data-n="' + closedN + '"]') : null;
+    if (row) row.focus({ preventScroll: true });
+    else document.getElementById('queue-heading').focus({ preventScroll: true });
+  }
+
+  function setStatus(status) {
+    var ticket = tickets.find(function (item) { return item.n === openId; });
+    if (!ticket || ticket.status === status) return;
+    ticket.status = status;
+    if (status === 'Обработан' && !ticket.answered) ticket.answered = true;
+    paintStatusButtons(status);
+    document.getElementById('panel-answer').hidden = !(status === 'Обработан' && ticket.answered);
+    renderList();
+  }
+
+  function syncNav() {
+    document.querySelectorAll('[data-view]').forEach(function (button) {
+      if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    var auth = document.getElementById('auth-btn');
+    if (!session && view === 'login') auth.setAttribute('aria-current', 'page');
+    else auth.removeAttribute('aria-current');
+  }
+
+  function renderSession() {
+    var auth = document.getElementById('auth-btn');
+    var role = document.getElementById('role');
+    var line = document.getElementById('session');
+    if (session) {
+      auth.textContent = 'Выйти';
+      role.hidden = false;
+      role.textContent = session.role;
+      line.hidden = false;
+      line.textContent = 'Вход выполнен: ' + session.role;
+    } else {
+      auth.textContent = 'Вход';
+      role.hidden = true;
+      role.textContent = '';
+      line.hidden = true;
+      line.textContent = '';
+    }
+    syncNav();
+  }
+
+  function showView(name) {
+    if (panelOpen || spring.running) closePanel(false);
+    view = name;
+    document.getElementById('view-queue').hidden = name !== 'queue';
+    document.getElementById('view-widget').hidden = name !== 'widget';
+    document.getElementById('view-login').hidden = name !== 'login';
+    var titles = { queue: 'Очередь', widget: 'Виджет', login: 'Вход' };
+    document.title = titles[name] + ' — Мини-CRM';
+    syncNav();
+  }
+
+  function watchHover(root) {
+    root.addEventListener('pointerover', function (event) {
+      var el = event.target.closest('[data-n]');
+      if (!el || !root.contains(el)) return;
+      var n = Number(el.dataset.n);
+      if (n && n !== hoverId) {
+        hoverId = n;
+        paintActiveMark();
+      }
+    });
+    root.addEventListener('pointerleave', function () {
+      if (hoverId == null) return;
+      hoverId = null;
+      paintActiveMark();
+    });
+  }
+
+  function setFieldError(input, message) {
+    var err = document.getElementById(input.id + '-err');
+    if (!err) return;
+    err.textContent = message || '';
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
+
+  function fieldValue(id) {
+    return document.getElementById(id).value.trim();
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' Б';
+    if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + ' КБ';
+    var mb = bytes / (1024 * 1024);
+    var text = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1).replace('.', ',');
+    return text + ' МБ';
+  }
+
+  function fileError(files) {
+    if (files.length > 5) return 'Не больше пяти файлов';
+    for (var i = 0; i < files.length; i += 1) {
+      if (files[i].size > 10 * 1024 * 1024) return 'Каждый файл не больше 10 МБ';
+    }
+    return '';
+  }
+
+  function paintPicked() {
+    var input = document.getElementById('w-files');
+    var picked = document.getElementById('w-picked');
+    var files = input.files ? Array.prototype.slice.call(input.files) : [];
+    picked.textContent = files.map(function (file) {
+      return file.name + ', ' + formatSize(file.size);
+    }).join('\n');
+    setFieldError(input, fileError(files));
+  }
+
+  function nowTime() {
+    var d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  document.querySelectorAll('[data-view]').forEach(function (button) {
+    button.addEventListener('click', function () { showView(button.dataset.view); });
+  });
+
+  document.getElementById('auth-btn').addEventListener('click', function () {
+    if (session) session = null;
+    renderSession();
+    showView('login');
+  });
+
+  document.querySelectorAll('.filters button').forEach(function (button) {
+    button.addEventListener('click', function () {
+      statusFilter = button.dataset.filter;
+      document.querySelectorAll('.filters button').forEach(function (item) {
+        item.setAttribute('aria-pressed', item === button ? 'true' : 'false');
+      });
+      renderList();
+    });
+  });
+
+  document.getElementById('view-queue').addEventListener('click', function (event) {
+    if (!panelOpen) return;
+    if (event.target.closest('.slip, .mark, .filters, button')) return;
+    closePanel();
+  });
+
+  document.getElementById('register').addEventListener('click', function (event) {
+    var slip = event.target.closest('.slip');
+    if (!slip) return;
+    openTicket(Number(slip.dataset.n), slip, event);
+  });
+
+  document.getElementById('rhythm').addEventListener('click', function (event) {
+    var mark = event.target.closest('.mark');
+    if (!mark) return;
+    openTicket(Number(mark.dataset.n), mark, event);
+  });
+
+  watchHover(document.getElementById('register'));
+  watchHover(document.getElementById('rhythm'));
+
+  document.getElementById('close-btn').addEventListener('click', closePanel);
+  scrim.addEventListener('click', closePanel);
+  panel.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-status]');
+    if (!button) return;
+    setStatus(button.dataset.status);
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && (panelOpen || spring.running)) {
+      event.preventDefault();
+      closePanel();
+      return;
+    }
+    if (event.key !== 'Tab' || !panelOpen) return;
+    var nodes = panel.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])');
+    var list = Array.prototype.filter.call(nodes, function (el) {
+      return !el.disabled && !el.closest('[hidden]');
+    });
+    if (!list.length) return;
+    var first = list[0];
+    var last = list[list.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+
+  document.getElementById('file-btn').addEventListener('click', function () {
+    document.getElementById('w-files').click();
+  });
+  document.getElementById('w-files').addEventListener('change', paintPicked);
+
+  Array.prototype.forEach.call(document.querySelectorAll('#widget-form input, #widget-form textarea'), function (input) {
+    input.addEventListener('input', function () {
+      if (input.id !== 'w-files') setFieldError(input, '');
+      document.getElementById('w-success').hidden = true;
+    });
+  });
+
+  document.getElementById('widget-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var name = document.getElementById('w-name');
+    var phone = document.getElementById('w-phone');
+    var email = document.getElementById('w-email');
+    var topic = document.getElementById('w-topic');
+    var text = document.getElementById('w-text');
+    var filesInput = document.getElementById('w-files');
+    var firstInvalid = null;
+
+    function check(input, message) {
+      setFieldError(input, message);
+      if (message && !firstInvalid) firstInvalid = input;
+    }
+
+    check(name, fieldValue('w-name') ? '' : 'Заполните поле');
+    var phoneValue = fieldValue('w-phone');
+    var phoneMessage = '';
+    if (!phoneValue) phoneMessage = 'Заполните поле';
+    else if (!/^\+\d{11,15}$/.test(phoneValue)) phoneMessage = 'Номер в формате +79991234567';
+    else if (tickets.some(function (ticket) { return ticket.phone === phoneValue; })) {
+      phoneMessage = 'С этого телефона заявка сегодня уже есть.';
+    }
+    check(phone, phoneMessage);
+    var emailValue = fieldValue('w-email');
+    var emailMessage = '';
+    if (!emailValue) emailMessage = 'Заполните поле';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) emailMessage = 'Не похоже на почту';
+    check(email, emailMessage);
+    check(topic, fieldValue('w-topic') ? '' : 'Заполните поле');
+    check(text, fieldValue('w-text') ? '' : 'Заполните поле');
+    var files = filesInput.files ? Array.prototype.slice.call(filesInput.files) : [];
+    check(filesInput, fileError(files));
+
+    if (firstInvalid) {
+      document.getElementById('w-success').hidden = true;
+      firstInvalid.focus();
+      return;
+    }
+
+    var next = tickets.reduce(function (max, ticket) { return Math.max(max, ticket.n); }, 0) + 1;
+    tickets.push({
+      n: next,
+      time: nowTime(),
+      name: fieldValue('w-name'),
+      phone: phoneValue,
+      email: emailValue,
+      topic: fieldValue('w-topic'),
+      text: document.getElementById('w-text').value.trim(),
+      status: 'Новый',
+      files: files.map(function (file) { return { name: file.name, size: formatSize(file.size) }; }),
+      answered: false
+    });
+    renderCounts();
+    renderList();
+    renderRhythm();
+    event.target.reset();
+    document.getElementById('w-picked').textContent = '';
+    ['w-name', 'w-phone', 'w-email', 'w-topic', 'w-text', 'w-files'].forEach(function (id) {
+      setFieldError(document.getElementById(id), '');
+    });
+    var success = document.getElementById('w-success');
+    success.hidden = false;
+    success.focus && success.setAttribute('tabindex', '-1');
+    success.focus({ preventScroll: true });
+  });
+
+  ['l-email', 'l-password'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () {
+      setFieldError(document.getElementById(id), '');
+    });
+  });
+
+  document.getElementById('login-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var emailInput = document.getElementById('l-email');
+    var passwordInput = document.getElementById('l-password');
+    var emailValue = emailInput.value.trim().toLowerCase();
+    var passwordValue = passwordInput.value;
+    var firstInvalid = null;
+    setFieldError(emailInput, '');
+    setFieldError(passwordInput, '');
+    if (!emailValue) {
+      setFieldError(emailInput, 'Заполните поле');
+      firstInvalid = emailInput;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+      setFieldError(emailInput, 'Не похоже на почту');
+      firstInvalid = emailInput;
+    }
+    if (!passwordValue) {
+      setFieldError(passwordInput, 'Заполните поле');
+      if (!firstInvalid) firstInvalid = passwordInput;
+    }
+    if (firstInvalid) {
+      firstInvalid.focus();
+      return;
+    }
+    var user = USERS.find(function (item) { return item.email === emailValue; });
+    if (!user) {
+      setFieldError(emailInput, 'Неверная почта или пароль');
+      emailInput.focus();
+      return;
+    }
+    if (user.password !== passwordValue) {
+      setFieldError(passwordInput, 'Неверная почта или пароль');
+      passwordInput.focus();
+      return;
+    }
+    session = { role: user.role };
+    passwordInput.value = '';
+    renderSession();
+    showView('queue');
+  });
+
+  renderCounts();
+  renderRhythm();
+  renderList();
+  renderSession();
+})();
+</script>
+</body>
+</html>
